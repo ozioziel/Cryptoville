@@ -22,19 +22,26 @@ jobs:
     name: Contratos (Rust + Soroban)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32v1-none
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: contracts
+      # soroban-sdk 28 solo se deja compilar a .wasm con `stellar contract build`.
+      - name: Instalar Stellar CLI
+        run: |
+          curl -sSfL -o stellar-cli.tgz https://github.com/stellar/stellar-cli/releases/download/v28.0.0/stellar-cli-28.0.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli.tgz -C /usr/local/bin stellar
+          rm stellar-cli.tgz
+          stellar --version
       - name: Pruebas
         working-directory: contracts
         run: cargo test
       - name: Compilar a .wasm
         working-directory: contracts
-        run: cargo build --target wasm32v1-none --release
+        run: stellar contract build
       - name: Prueba de upgrade con el .wasm real
         working-directory: contracts
         run: cargo test -- --ignored
@@ -43,10 +50,11 @@ jobs:
     name: Web, API y shared (tipos, pruebas y build)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      # Node 22 = el mismo de las imágenes de producción (node:22-alpine).
+      - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
       - name: Paquete compartido (build y pruebas)
@@ -68,10 +76,10 @@ jobs:
     name: API de punta a punta (Supabase local)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
       # Levanta Supabase local con Docker, crea el .env, aplica migraciones y carga datos de ejemplo.
@@ -88,7 +96,7 @@ jobs:
     # Runner ARM gratuito para repos públicos: compila igual que en el VPS de Oracle (aarch64).
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Imagen de la API
         run: docker build -f deploy/api.Dockerfile -t cryptoville-api:ci .
       - name: Imagen de la web (Caddy)

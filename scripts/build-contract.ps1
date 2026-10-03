@@ -12,11 +12,11 @@ if (-not $SinPruebas) {
 }
 
 Write-Host '==> Compilando (wasm32v1-none, release)'
-if (Get-Command stellar -ErrorAction SilentlyContinue) {
-  stellar contract build
-} else {
-  cargo build --target wasm32v1-none --release
+# soroban-sdk 28 solo se deja compilar a .wasm con la Stellar CLI (v25.2 o superior).
+if (-not (Get-Command stellar -ErrorAction SilentlyContinue)) {
+  throw 'Falta la Stellar CLI: instalala desde https://developers.stellar.org/docs/tools/cli'
 }
+stellar contract build
 if ($LASTEXITCODE -ne 0) { throw 'No se pudieron compilar los contratos' }
 
 New-Item -ItemType Directory -Force 'dist' | Out-Null

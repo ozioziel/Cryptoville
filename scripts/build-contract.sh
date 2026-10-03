@@ -11,11 +11,12 @@ if [ "${1:-}" != "--sin-pruebas" ]; then
 fi
 
 echo "==> Compilando (wasm32v1-none, release)"
-if command -v stellar >/dev/null 2>&1; then
-  stellar contract build
-else
-  cargo build --target wasm32v1-none --release
+# soroban-sdk 28 solo se deja compilar a .wasm con la Stellar CLI (v25.2 o superior).
+if ! command -v stellar >/dev/null 2>&1; then
+  echo "Falta la Stellar CLI: instálala desde https://developers.stellar.org/docs/tools/cli" >&2
+  exit 1
 fi
+stellar contract build
 
 mkdir -p dist
 echo
