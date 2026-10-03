@@ -1,0 +1,15 @@
+# Los scripts y archivos de Docker se ejecutan en Linux (VPS y GitHub Actions):
+# siempre con saltos de línea LF, aunque se editen en Windows.
+* text=auto
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.Dockerfile text eol=lf
+Caddyfile text eol=lf
+*.sql text eol=lf
+*.toml text eol=lf
+
+# Binarios
+*.wasm binary
+*.png binary
+*.docx binary

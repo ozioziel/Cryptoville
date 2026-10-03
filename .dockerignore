@@ -1,0 +1,16 @@
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+contracts/target
+apps/api/src/generated
+.git
+.env
+.env.*
+!.env.example
+!.env.local.example
+.seed-keys.json
+supabase/.temp
+supabase/.branches
+deploy/backups
+backups
+*.log

@@ -1,0 +1,60 @@
+# Cryptoville en el VPS: Caddy (web + HTTPS), API (NestJS) y respaldos diarios.
+# La base de datos, el tiempo real y las fotos están en Supabase (nube).
+# No se usa a mano: deploy/deploy.sh calcula SITIO, elige los puertos y aplica las migraciones.
+# Los puertos de Caddy están en archivos aparte:
+#   puertos-estandar.yml -> 80 y 443 (VPS propio, con HTTPS automático)
+#   puerto-unico.yml     -> un solo puerto, por ejemplo 6702 (VPS compartido, solo HTTP)
+name: cryptoville
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/api.Dockerfile
+    image: cryptoville-api
+    env_file: ${ENV_FILE:-../.env}
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    volumes:
+      # Solo lo usa `deploy.sh --con-ejemplo` para cargar los usuarios de ejemplo.
+      - ${SEED_KEYS:-./sin-llaves.json}:/app/.seed-keys.json:ro
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    image: cryptoville-web
+    environment:
+      SITIO: ${SITIO:-:80}
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  backups:
+    image: postgres:17-alpine
+    env_file: ${ENV_FILE:-../.env}
+    entrypoint: ["/bin/sh", "/backup.sh"]
+    volumes:
+      - ./backup.sh:/backup.sh:ro
+      - ./backups:/backups
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "5m", max-file: "2" }
+
+volumes:
+  # Certificados HTTPS de Caddy: no borrar (Let's Encrypt limita cuántos se piden por semana).
+  caddy_data:
+  caddy_config:

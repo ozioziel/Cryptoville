@@ -1,0 +1,257 @@
+// Esquema de la base de datos de Cryptoville (Postgres de Supabase).
+//
+// - Las tablas viven en el schema `public`. `usuarios.id` es el mismo id de `auth.users`
+//   (la llave foránea y las políticas RLS están en las migraciones SQL).
+// - Las migraciones se escriben a mano en prisma/migrations y se aplican con
+//   `prisma migrate deploy` (no se usa `migrate dev`, porque Supabase tiene schemas propios).
+// - El dinero se guarda como Decimal(20,7): el USDC de prueba tiene 7 decimales.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "cjs"
+  importFileExtension = ""
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Rol {
+  usuario
+  arbitro
+}
+
+enum Barrio {
+  diseno
+  clases
+  tecnologia
+}
+
+enum EstadoPedido {
+  solicitado
+  aceptado
+  cancelado
+  pagado
+  entregado
+  en_disputa
+  liberado
+  reembolsado
+  resuelto
+}
+
+enum AccionPedido {
+  aceptar
+  cancelar
+  crear_pedido
+  marcar_entregado
+  liberar
+  rechazar
+  abrir_disputa
+  resolver
+  reembolsar_por_vencimiento
+  cobrar_por_vencimiento
+}
+
+enum Parte {
+  Cliente
+  Proveedor
+}
+
+enum TipoAviso {
+  nuevo_pedido
+  pedido_aceptado
+  te_toca_pagar
+  te_toca_entregar
+  te_toca_liberar
+  te_toca_verificar
+  disputa_abierta
+  disputa_resuelta
+  pedido_cerrado
+  nuevo_mensaje
+}
+
+model Usuario {
+  id        String   @id @db.Uuid
+  direccion String   @unique
+  nombre    String
+  bio       String?
+  avatar    Int      @default(85)
+  rol       Rol      @default(usuario)
+  creado_en DateTime @default(now()) @db.Timestamptz(3)
+
+  local            Local?
+  pedidosCliente   Pedido[]     @relation("cliente")
+  pedidosProveedor Pedido[]     @relation("proveedor")
+  pasosDeclarados  PasoPedido[] @relation("declarado")
+  pasosVerificados PasoPedido[] @relation("verificado")
+  mensajes         Mensaje[]
+  disputasAbiertas Disputa[]
+  resenasEscritas  Resena[]     @relation("autor")
+  resenasRecibidas Resena[]     @relation("destinatario")
+  avisos           Aviso[]
+
+  @@map("usuarios")
+}
+
+/// Desafíos de inicio de sesión (mensaje que se firma con la wallet). Nadie los puede leer desde la web.
+model DesafioLogin {
+  nonce     String   @id
+  direccion String
+  mensaje   String
+  expira_en DateTime @db.Timestamptz(3)
+  usado     Boolean  @default(false)
+  creado_en DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([direccion])
+  @@map("desafios_login")
+}
+
+model Local {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id  String   @unique @db.Uuid
+  nombre      String
+  barrio      Barrio
+  /// Lote del mapa (1-4 Diseño, 5-8 Clases, 9-12 Tecnología).
+  lote        Int      @unique
+  color       String   @default("#e07a5f")
+  descripcion String?
+  activo      Boolean  @default(true)
+  creado_en   DateTime @default(now()) @db.Timestamptz(3)
+
+  usuario   Usuario    @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  servicios Servicio[]
+
+  @@map("locales")
+}
+
+model Servicio {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  local_id     String   @db.Uuid
+  titulo       String
+  descripcion  String
+  precio_usdc  Decimal  @db.Decimal(20, 7)
+  dias_entrega Int
+  foto_url     String?
+  activo       Boolean  @default(true)
+  creado_en    DateTime @default(now()) @db.Timestamptz(3)
+
+  local   Local    @relation(fields: [local_id], references: [id], onDelete: Cascade)
+  pedidos Pedido[]
+
+  @@index([local_id])
+  @@map("servicios")
+}
+
+model Pedido {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// `id` del pedido en el contrato (u64). Lo genera la API.
+  numero         BigInt       @unique
+  servicio_id    String       @db.Uuid
+  cliente_id     String       @db.Uuid
+  proveedor_id   String       @db.Uuid
+  estado         EstadoPedido @default(solicitado)
+  monto_usdc     Decimal      @db.Decimal(20, 7)
+  detalle        String
+  fecha_limite   DateTime?    @db.Timestamptz(3)
+  /// Pedido creado por el seed, sin transacciones reales en Stellar.
+  es_ejemplo     Boolean      @default(false)
+  creado_en      DateTime     @default(now()) @db.Timestamptz(3)
+  actualizado_en DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+
+  servicio  Servicio     @relation(fields: [servicio_id], references: [id])
+  cliente   Usuario      @relation("cliente", fields: [cliente_id], references: [id])
+  proveedor Usuario      @relation("proveedor", fields: [proveedor_id], references: [id])
+  pasos     PasoPedido[]
+  mensajes  Mensaje[]
+  disputa   Disputa?
+  resenas   Resena[]
+  avisos    Aviso[]
+
+  @@index([cliente_id])
+  @@index([proveedor_id])
+  @@map("pedidos")
+}
+
+/// Cada acción del pedido. Las que se hacen en Stellar Lab llevan el hash de la transacción.
+model PasoPedido {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pedido_id      String       @db.Uuid
+  accion         AccionPedido
+  hash           String?      @unique
+  declarado_por  String       @db.Uuid
+  verificado_por String?      @db.Uuid
+  verificado_en  DateTime?    @db.Timestamptz(3)
+  creado_en      DateTime     @default(now()) @db.Timestamptz(3)
+
+  pedido      Pedido   @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  declarante  Usuario  @relation("declarado", fields: [declarado_por], references: [id])
+  verificador Usuario? @relation("verificado", fields: [verificado_por], references: [id])
+
+  @@index([pedido_id])
+  @@map("pasos_pedido")
+}
+
+model Mensaje {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pedido_id String   @db.Uuid
+  autor_id  String   @db.Uuid
+  texto     String
+  creado_en DateTime @default(now()) @db.Timestamptz(3)
+
+  pedido Pedido  @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  autor  Usuario @relation(fields: [autor_id], references: [id])
+
+  @@index([pedido_id])
+  @@map("mensajes")
+}
+
+model Disputa {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pedido_id   String    @unique @db.Uuid
+  abierta_por String    @db.Uuid
+  motivo      String
+  ganador     Parte?
+  decision    String?
+  creado_en   DateTime  @default(now()) @db.Timestamptz(3)
+  resuelta_en DateTime? @db.Timestamptz(3)
+
+  pedido Pedido  @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  autor  Usuario @relation(fields: [abierta_por], references: [id])
+
+  @@map("disputas")
+}
+
+model Resena {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pedido_id       String   @db.Uuid
+  autor_id        String   @db.Uuid
+  destinatario_id String   @db.Uuid
+  calificacion    Int
+  comentario      String?
+  creado_en       DateTime @default(now()) @db.Timestamptz(3)
+
+  pedido       Pedido  @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  autor        Usuario @relation("autor", fields: [autor_id], references: [id])
+  destinatario Usuario @relation("destinatario", fields: [destinatario_id], references: [id])
+
+  @@unique([pedido_id, autor_id])
+  @@index([destinatario_id])
+  @@map("resenas")
+}
+
+model Aviso {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id String    @db.Uuid
+  pedido_id  String?   @db.Uuid
+  tipo       TipoAviso
+  texto      String
+  leido      Boolean   @default(false)
+  creado_en  DateTime  @default(now()) @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  pedido  Pedido? @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id, leido])
+  @@map("avisos")
+}

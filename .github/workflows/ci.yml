@@ -1,0 +1,105 @@
+# Integración continua de Cryptoville: corre en cada push y pull request.
+# No despliega nada ni toca el VPS (eso será deploy.yml, más adelante).
+name: CI
+
+on:
+  # En cualquier rama (main, demo-funcional…) y en los pull requests hacia main.
+  push:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# Si llega un push nuevo a la misma rama, se cancela la corrida anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  contratos:
+    name: Contratos (Rust + Soroban)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32v1-none
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: contracts
+      # soroban-sdk 28 solo se deja compilar a .wasm con `stellar contract build`.
+      - name: Instalar Stellar CLI
+        run: |
+          curl -sSfL -o stellar-cli.tgz https://github.com/stellar/stellar-cli/releases/download/v28.0.0/stellar-cli-28.0.0-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli.tgz -C /usr/local/bin stellar
+          rm stellar-cli.tgz
+          stellar --version
+      - name: Pruebas
+        working-directory: contracts
+        run: cargo test
+      - name: Compilar a .wasm
+        working-directory: contracts
+        run: stellar contract build
+      - name: Prueba de upgrade con el .wasm real
+        working-directory: contracts
+        run: cargo test -- --ignored
+
+  typescript:
+    name: Web, API y shared (tipos, pruebas y build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # Node 22 = el mismo de las imágenes de producción (node:22-alpine).
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Paquete compartido (build y pruebas)
+        run: |
+          npm run build -w @cryptoville/shared
+          npm run test -w @cryptoville/shared
+      - name: Revisión de tipos (API y web)
+        run: |
+          npm run typecheck -w @cryptoville/api
+          npm run typecheck -w @cryptoville/web
+      - name: Pruebas de la web
+        run: npm run test -w @cryptoville/web
+      - name: Build de la API y de la web
+        run: |
+          npm run build -w @cryptoville/api
+          npm run build -w @cryptoville/web
+
+  api-e2e:
+    name: API de punta a punta (Supabase local)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      # Levanta Supabase local con Docker, crea el .env, aplica migraciones y carga datos de ejemplo.
+      - name: Preparar Supabase local
+        run: npm run setup
+      - name: Pruebas de la API
+        run: npm run test -w @cryptoville/api
+      - name: Apagar Supabase
+        if: always()
+        run: npx supabase stop --no-backup
+
+  docker:
+    name: Imágenes de Docker (ARM, como el VPS)
+    # Runner ARM gratuito para repos públicos: compila igual que en el VPS de Oracle (aarch64).
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v5
+      - name: Imagen de la API
+        run: docker build -f deploy/api.Dockerfile -t cryptoville-api:ci .
+      - name: Imagen de la web (Caddy)
+        run: docker build -f deploy/web.Dockerfile -t cryptoville-web:ci .
+      - name: Revisar la configuración de Caddy
+        run: docker run --rm -e SITIO=:80 cryptoville-web:ci caddy validate --config /etc/caddy/Caddyfile
