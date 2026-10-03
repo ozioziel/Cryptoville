@@ -1,0 +1,38 @@
+{
+  "name": "cryptoville",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pueblo digital de servicios entre personas con pago en garantía en Stellar",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "setup": "node scripts/setup-local.mjs",
+    "dev": "npm run build -w @cryptoville/shared && concurrently -k -n shared,api,web -c gray,blue,green \"npm run dev -w @cryptoville/shared\" \"npm run dev -w @cryptoville/api\" \"npm run dev -w @cryptoville/web\"",
+    "build": "npm run build -w @cryptoville/shared && npm run build -w @cryptoville/api && npm run build -w @cryptoville/web",
+    "test": "npm run build -w @cryptoville/shared && npm run test -w @cryptoville/shared && npm run test -w @cryptoville/api && npm run test -w @cryptoville/web",
+    "typecheck": "npm run build -w @cryptoville/shared && npm run typecheck -w @cryptoville/api && npm run typecheck -w @cryptoville/web",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "db:migrate": "npm run db:migrate -w @cryptoville/api",
+    "db:seed": "npm run db:seed -w @cryptoville/api",
+    "db:reset": "supabase db reset --no-seed && npm run db:migrate && npm run db:seed",
+    "seed:keys": "node scripts/generate-seed-keys.mjs",
+    "map:generate": "node scripts/generate-map.mjs",
+    "contract:build": "node scripts/run-build-contract.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "supabase": "^2.119.0"
+  },
+  "allowScripts": {
+    "@prisma/engines@7.10.0": true,
+    "esbuild@0.27.7": true,
+    "esbuild@0.28.2": true,
+    "prisma@7.10.0": true
+  }
+}
