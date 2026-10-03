@@ -1,0 +1,6 @@
+# VPS compartido: Cryptoville usa SOLO el puerto PUERTO_PUBLICO del .env (por ejemplo 6702).
+# No toca los puertos 80/443 de otros servicios. Sin esos puertos no hay HTTPS automático.
+services:
+  caddy:
+    ports:
+      - "${PUERTO_PUBLICO:?Falta PUERTO_PUBLICO en el .env}:80"

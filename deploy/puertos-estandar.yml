@@ -1,0 +1,7 @@
+# VPS propio: Caddy usa los puertos 80 y 443 y obtiene el certificado HTTPS solo.
+services:
+  caddy:
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
