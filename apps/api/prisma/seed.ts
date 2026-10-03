@@ -105,23 +105,31 @@ function numeroReal(): bigint {
   return BigInt(Math.floor(Date.now() / 1000)) * 1000n + BigInt(contadorNumero);
 }
 
+const esperar = (ms: number) => new Promise((listo) => setTimeout(listo, ms));
+
 async function asegurarCuentaAuth(direccion: string): Promise<string> {
   const email = correoDeWallet(direccion, DOMINIO);
   const password = contrasenaDeWallet(direccion, SECRETO);
-  const creado = await supabase.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { direccion } });
+  // Reintenta si Auth todavía está arrancando (errores de red o 5xx).
+  let creado = await supabase.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { direccion } });
+  for (let intento = 1; intento < 6 && creado.error && (creado.error.status === undefined || creado.error.status >= 500); intento++) {
+    console.log(`  Auth todavía no está lista (${creado.error.message}); reintento ${intento}/5…`);
+    await esperar(3000);
+    creado = await supabase.auth.admin.createUser({ email, password, email_confirm: true, app_metadata: { direccion } });
+  }
   if (creado.data.user) return creado.data.user.id;
   // Ya existía: se busca por correo.
   for (let pagina = 1; pagina < 50; pagina++) {
     const { data, error } = await supabase.auth.admin.listUsers({ page: pagina, perPage: 200 });
     if (error) throw error;
-    const u = data.users.find((x) => x.email === email);
+    const u = (data.users as { id: string; email?: string }[]).find((x) => x.email === email);
     if (u) {
       await supabase.auth.admin.updateUserById(u.id, { password });
       return u.id;
     }
     if (data.users.length < 200) break;
   }
-  throw new Error(`No se pudo crear la cuenta de ${direccion}: ${creado.error?.message}`);
+  throw new Error(`No se pudo crear la cuenta de ${direccion}: ${creado.error?.message} (estado ${creado.error?.status})`);
 }
 
 async function main() {

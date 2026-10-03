@@ -49,6 +49,24 @@ if (!estado?.API_URL) {
 }
 console.log(`Supabase local en ${estado.API_URL}`);
 
+// `supabase start` termina cuando los contenedores arrancan, pero Auth puede tardar unos
+// segundos más en responder (pasa sobre todo en CI). Se espera antes de migrar y cargar datos.
+async function esperarAuth(url, llave) {
+  for (let intento = 1; intento <= 60; intento++) {
+    try {
+      const r = await fetch(`${url}/auth/v1/health`, { headers: { apikey: llave } });
+      if (r.ok) return;
+    } catch {
+      // Todavía no responde.
+    }
+    await new Promise((listo) => setTimeout(listo, 2000));
+  }
+  console.error('Supabase Auth no respondió después de 2 minutos (revisa `npx supabase status`).');
+  process.exit(1);
+}
+await esperarAuth(estado.API_URL, estado.ANON_KEY ?? estado.PUBLISHABLE_KEY);
+console.log('Supabase Auth responde.');
+
 paso('Llaves de los usuarios de ejemplo (solo testnet)');
 correr('node scripts/generate-seed-keys.mjs');
 const llaves = JSON.parse(readFileSync(path.join(raiz, '.seed-keys.json'), 'utf8'));
