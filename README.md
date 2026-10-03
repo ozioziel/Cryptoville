@@ -76,6 +76,10 @@ Abre <http://localhost:5173>.
 - El servidor nunca firma transacciones ni guarda llaves de los usuarios.
 - `.env` y `.seed-keys.json` están en `.gitignore`. Las llaves de ejemplo son **solo para testnet**.
 
+## Licencia
+
+Código abierto bajo la licencia [MIT](LICENSE).
+
 ## Créditos
 
 - Gráficos: **[Kenney](https://kenney.nl)**, paquetes *Tiny Town* y *Tiny Dungeon*, licencia **CC0** (dominio público). Gracias, Kenney. Las licencias están en `apps/web/public/assets/kenney/`.

@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Pueblo digital de servicios entre personas con pago en garantía en Stellar",
+  "license": "MIT",
   "workspaces": [
     "packages/*",
     "apps/*"
