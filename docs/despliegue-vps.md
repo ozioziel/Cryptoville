@@ -120,6 +120,49 @@ Si el servidor es de otra persona y ya tiene servicios en los puertos 80 y 443:
 - La app queda en `http://IP:PUERTO`, **sin HTTPS**: Let's Encrypt necesita los puertos 80 o 443 para dar el certificado.
 - Para tener HTTPS en un servidor compartido, el dueño puede agregar en su proxy (nginx, Caddy, Traefik) una ruta de `IP-con-guiones.sslip.io` hacia `localhost:PUERTO`.
 
+## Despliegue automático con GitHub Actions
+
+| Evento | CI (`ci.yml`) | Deploy (`deploy.yml`) |
+|---|---|---|
+| Push a una rama que no es `main` | Corre | No |
+| Pull request hacia `main` | Corre | No |
+| Merge a `main` | Corre | **Sí, solo si el CI pasó** |
+
+`deploy.yml` entra al VPS por SSH con una llave **exclusiva**. En `~/.ssh/authorized_keys`, esa llave está restringida para que solo pueda ejecutar `deploy/ci-deploy.sh`. Ese script deja el servidor igual a `main` y ejecuta `deploy/deploy.sh`.
+
+### Configuración (una sola vez)
+
+1. **En tu PC**, genera la llave y deja la frase en blanco (presiona Enter dos veces):
+
+   ```bash
+   ssh-keygen -t ed25519 -C "cryptoville-github-actions" -f ~/.ssh/cryptoville_actions
+   ```
+
+2. **En el VPS**, con el proyecto ya actualizado (`git pull`), respalda `authorized_keys` y **agrega al final** la llave pública, con la restricción delante:
+
+   ```bash
+   cp ~/.ssh/authorized_keys ~/.ssh/authorized_keys.respaldo
+   echo 'command="bash ~/pinguinos/Cryptoville/deploy/ci-deploy.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty CONTENIDO_DE_cryptoville_actions.pub' >> ~/.ssh/authorized_keys
+   ```
+
+   Usa `>>`, que agrega una línea. Con un solo `>` se borrarían las llaves que ya están.
+
+3. **En GitHub** (*Settings → Secrets and variables → Actions*):
+
+   | Tipo | Nombre | Valor |
+   |---|---|---|
+   | Secret | `VPS_HOST` | `144.22.43.169` |
+   | Secret | `VPS_USER` | `ubuntu` |
+   | Secret | `VPS_SSH_KEY` | Contenido completo de `~/.ssh/cryptoville_actions` (la **privada**) |
+   | Secret | `VPS_KNOWN_HOSTS` | Salida de `ssh-keyscan 144.22.43.169` |
+   | Variable | `URL_PUBLICA` | `http://144.22.43.169:6702` |
+
+4. **Protección de `main`** (*Settings → Branches → Add rule* para `main`):
+   - *Require a pull request before merging*;
+   - *Require status checks to pass*, con los 4 trabajos del CI.
+
+> No pruebes la llave de Actions a mano antes del primer merge: el script deja el servidor igual a `main`, y si `main` todavía no tiene el código nuevo, el servidor quedaría con la versión vieja.
+
 ## Actualizar la app
 
 ```bash

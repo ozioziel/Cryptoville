@@ -13,5 +13,7 @@ COPY apps/web apps/web
 RUN npm run build -w @cryptoville/shared && npm run build -w @cryptoville/web
 
 FROM caddy:2-alpine
+# Etiqueta para limpiar solo las imágenes de este proyecto (deploy/ci-deploy.sh).
+LABEL proyecto="cryptoville"
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/apps/web/dist /srv

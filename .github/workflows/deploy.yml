@@ -1,0 +1,77 @@
+# Despliegue continuo de Cryptoville al VPS.
+#
+# Solo despliega cuando hay cambios en main Y el CI de ese commit pasó:
+#   - push a otras ramas o pull requests  -> corre el CI, NO despliega
+#   - merge del pull request a main        -> corre el CI y, si pasa, despliega
+#
+# También se puede lanzar a mano desde Actions -> Deploy -> Run workflow (solo en main).
+#
+# Necesita estos secrets en GitHub (Settings -> Secrets and variables -> Actions):
+#   VPS_HOST          IP del servidor (144.22.43.169)
+#   VPS_USER          usuario SSH (ubuntu)
+#   VPS_SSH_KEY       llave privada de cryptoville_actions (la pública va en authorized_keys,
+#                     restringida a deploy/ci-deploy.sh)
+#   VPS_KNOWN_HOSTS   huella del servidor (salida de: ssh-keyscan 144.22.43.169)
+# Y opcionalmente la variable URL_PUBLICA (http://144.22.43.169:6702) para la comprobación final.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Nunca dos despliegues al mismo tiempo; si llega otro, espera su turno.
+concurrency:
+  group: deploy-produccion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  desplegar:
+    name: Desplegar en el VPS
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    environment: produccion
+    timeout-minutes: 45
+    steps:
+      - name: Preparar la conexión SSH
+        env:
+          LLAVE: ${{ secrets.VPS_SSH_KEY }}
+          HUELLAS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$LLAVE" ] || [ -z "$HUELLAS" ]; then
+            echo "::error::Faltan los secrets VPS_SSH_KEY o VPS_KNOWN_HOSTS (ver docs/despliegue-vps.md)"
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$LLAVE" > ~/.ssh/cryptoville_actions
+          chmod 600 ~/.ssh/cryptoville_actions
+          printf '%s\n' "$HUELLAS" > ~/.ssh/known_hosts
+
+      - name: Desplegar (ejecuta deploy/ci-deploy.sh en el servidor)
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh -i ~/.ssh/cryptoville_actions \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 \
+            "$VPS_USER@$VPS_HOST"
+
+      - name: Comprobar desde internet
+        if: vars.URL_PUBLICA != ''
+        run: curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "${{ vars.URL_PUBLICA }}/api/health"
+
+      - name: Borrar la llave del runner
+        if: always()
+        run: rm -f ~/.ssh/cryptoville_actions
