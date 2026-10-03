@@ -8,10 +8,11 @@
     "dev": "prisma generate && nest start --watch",
     "start": "node dist/main.js",
     "typecheck": "prisma generate && tsc --noEmit -p tsconfig.json",
-    "test": "jest --runInBand",
+    "test": "prisma generate && jest --runInBand",
     "db:migrate": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:seed": "prisma generate && tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "db:generate": "prisma generate"
   },
   "dependencies": {
     "@cryptoville/shared": "*",

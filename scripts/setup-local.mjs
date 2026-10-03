@@ -109,6 +109,10 @@ console.log('.env listo (las variables de Stellar que ya tenías se conservaron)
 paso('Paquete compartido');
 correr('npm run build -w @cryptoville/shared');
 
+paso('Cliente de Prisma');
+// El cliente generado no se versiona (apps/api/src/generated): hay que crearlo en cada clon.
+correr('npm run db:generate -w @cryptoville/api');
+
 paso('Migraciones de la base de datos');
 correr('npm run db:migrate');
 
