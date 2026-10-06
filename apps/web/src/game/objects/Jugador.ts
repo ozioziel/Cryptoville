@@ -1,21 +1,25 @@
 import Phaser from 'phaser';
 
-const VELOCIDAD = 72;
+/** Velocidad al caminar, en píxeles del mundo por segundo. */
+const VELOCIDAD = 230;
+/** Tamaño del personaje en el mundo (el de la vecina de la muestra). */
+export const ANCHO_JUGADOR = 46;
+export const ALTO_JUGADOR = 70;
 
-/** Personaje del jugador (sprite de Kenney Tiny Dungeon) con física arcade. */
+/** Personaje del jugador (persona en vectores) con física arcade. */
 export class Jugador extends Phaser.Physics.Arcade.Sprite {
   private paso?: Phaser.Tweens.Tween;
+  private escalaBase = 1;
 
-  constructor(escena: Phaser.Scene, x: number, y: number, frame: number) {
-    super(escena, x, y, 'personajes', frame);
+  /** `clave` es una textura de persona de ANCHO_JUGADOR × ALTO_JUGADOR dibujada con `resolucion`. */
+  constructor(escena: Phaser.Scene, x: number, y: number, clave: string, resolucion: number) {
+    super(escena, x, y, clave);
     escena.add.existing(this);
     escena.physics.add.existing(this);
     this.setOrigin(0.5, 1);
-    this.setDepth(10);
-    const cuerpo = this.body as Phaser.Physics.Arcade.Body;
-    // Hitbox en los pies, para poder pasar "por delante" de los techos.
-    cuerpo.setSize(10, 6).setOffset(3, 10);
-    cuerpo.setCollideWorldBounds(true);
+    this.setDepth(y);
+    (this.body as Phaser.Physics.Arcade.Body).setCollideWorldBounds(true);
+    this.ajustar(resolucion);
   }
 
   /** Mueve según una dirección normalizada (-1..1 en cada eje). */
@@ -33,18 +37,38 @@ export class Jugador extends Phaser.Physics.Arcade.Sprite {
     this.iniciarPaso();
   }
 
+  /** Cambia la persona (por ejemplo, después de editarla en el perfil). */
+  cambiarTextura(clave: string, resolucion: number): void {
+    this.setTexture(clave);
+    this.ajustar(resolucion);
+  }
+
+  /**
+   * @deprecated El jugador ya no usa frames de Kenney; la escena convierte el frame en una persona
+   * y llama a `cambiarTextura`. Se conserva para no romper código anterior.
+   */
   cambiarAvatar(frame: number): void {
-    this.setFrame(frame);
+    this.setData('avatar', frame);
+  }
+
+  private ajustar(resolucion: number): void {
+    this.detenerPaso();
+    this.escalaBase = 1 / resolucion;
+    this.setScale(this.escalaBase);
+    // Cuerpo de colisión en los pies (en píxeles de la textura), para poder pasar "por delante" de los techos.
+    const cuerpo = this.body as Phaser.Physics.Arcade.Body;
+    cuerpo.setSize(24 * resolucion, 12 * resolucion);
+    cuerpo.setOffset(11 * resolucion, 55 * resolucion);
   }
 
   private iniciarPaso(): void {
     if (this.paso?.isPlaying()) return;
-    this.paso = this.scene.tweens.add({ targets: this, scaleY: 0.9, duration: 120, yoyo: true, repeat: -1 });
+    this.paso = this.scene.tweens.add({ targets: this, scaleY: this.escalaBase * 0.92, duration: 120, yoyo: true, repeat: -1 });
   }
 
   private detenerPaso(): void {
     this.paso?.stop();
     this.paso = undefined;
-    this.setScale(1);
+    this.setScale(this.escalaBase);
   }
 }

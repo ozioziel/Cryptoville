@@ -5,6 +5,7 @@ import { LoggerModule } from 'nestjs-pino';
 import { AuthController } from './auth/auth.controller';
 import { AuthService } from './auth/auth.service';
 import { AvisosModule } from './avisos/avisos.service';
+import { BusquedasModule } from './busquedas/busquedas.module';
 import { ConfiguracionModule } from './config/config.module';
 import { leerConfiguracion } from './config/configuracion';
 import { DisputesModule } from './disputes/disputes.module';
@@ -39,6 +40,7 @@ const config = leerConfiguracion();
     UsersModule,
     ServicesModule,
     OrdersModule,
+    BusquedasModule,
     DisputesModule,
     ReputationModule,
     UploadsModule,

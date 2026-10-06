@@ -1,7 +1,8 @@
 import { formatoUsdc, type Local, type Reputacion, type Servicio, type Usuario } from '@cryptoville/shared';
+import type { LocalEnMapa } from '../../game/EventBus';
 import { supabase } from '../../lib/supabase';
 
-export type UsuarioPublico = Pick<Usuario, 'id' | 'nombre' | 'avatar' | 'direccion' | 'bio' | 'rol'>;
+export type UsuarioPublico = Pick<Usuario, 'id' | 'nombre' | 'avatar' | 'apariencia' | 'direccion' | 'bio' | 'rol'>;
 
 export interface LocalDelPueblo extends Local {
   usuario: UsuarioPublico;
@@ -15,7 +16,7 @@ const normalizarServicio = (s: Servicio): Servicio => ({ ...s, precio_usdc: form
 export async function cargarPueblo(): Promise<LocalDelPueblo[]> {
   const { data, error } = await supabase()
     .from('locales')
-    .select('*, usuario:usuarios(id, nombre, avatar, direccion, bio, rol), servicios(*)')
+    .select('*, usuario:usuarios(id, nombre, avatar, apariencia, direccion, bio, rol), servicios(*)')
     .eq('activo', true)
     .order('lote');
   if (error) throw new Error('No se pudo cargar el pueblo');
@@ -26,6 +27,20 @@ export async function cargarPueblo(): Promise<LocalDelPueblo[]> {
     servicios: l.servicios.filter((s) => s.activo).map(normalizarServicio),
     reputacion: reputaciones.get(l.usuario_id) ?? null,
   }));
+}
+
+/** Lo que Phaser necesita para dibujar un local en su villa. */
+export function localEnMapa(l: LocalDelPueblo): LocalEnMapa {
+  return {
+    id: l.id,
+    barrio: l.barrio,
+    lote: l.lote,
+    nombre: l.nombre,
+    color: l.color,
+    avatarDueno: l.usuario.avatar,
+    aparienciaDueno: l.usuario.apariencia,
+    aparienciaCasa: l.apariencia,
+  };
 }
 
 export async function cargarReputaciones(ids: string[]): Promise<Map<string, Reputacion>> {
@@ -42,13 +57,13 @@ export interface ResenaPublica {
   comentario: string | null;
   creado_en: string;
   pedido_id: string;
-  autor: { nombre: string; avatar: number };
+  autor: { nombre: string; avatar: number; apariencia: Usuario['apariencia'] };
 }
 
 export async function cargarResenas(usuarioId: string): Promise<ResenaPublica[]> {
   const { data } = await supabase()
     .from('resenas')
-    .select('id, calificacion, comentario, creado_en, pedido_id, autor:usuarios!resenas_autor_id_fkey(nombre, avatar)')
+    .select('id, calificacion, comentario, creado_en, pedido_id, autor:usuarios!resenas_autor_id_fkey(nombre, avatar, apariencia)')
     .eq('destinatario_id', usuarioId)
     .order('creado_en', { ascending: false })
     .limit(20);

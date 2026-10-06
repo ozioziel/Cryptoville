@@ -10,8 +10,10 @@ import { PrismaService } from '../prisma/prisma.service';
 export class AvisosService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async crear(usuarioId: string, tipo: TipoAviso, texto: string, pedidoId?: string): Promise<void> {
-    await this.prisma.aviso.create({ data: { usuario_id: usuarioId, tipo, texto, pedido_id: pedidoId ?? null } });
+  async crear(usuarioId: string, tipo: TipoAviso, texto: string, pedidoId?: string | null, busquedaId?: string | null): Promise<void> {
+    await this.prisma.aviso.create({
+      data: { usuario_id: usuarioId, tipo, texto, pedido_id: pedidoId ?? null, busqueda_id: busquedaId ?? null },
+    });
   }
 }
 

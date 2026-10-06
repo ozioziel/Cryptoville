@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   ConflictException,
   Controller,
@@ -16,12 +17,20 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  BARRIOS,
+  BARRIOS_ANTERIORES,
   COLORES_LOCAL,
-  LOTES_POR_BARRIO,
+  COLORES_LOCAL_ANTERIORES,
+  LISTA_BARRIOS,
   MAX_SERVICIOS_POR_LOCAL,
+  esCategoriaDe,
+  normalizarAparienciaCasa,
+  primerLoteLibre,
+  validarAparienciaCasa,
   type Barrio,
 } from '@cryptoville/shared';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsIn, IsInt, IsObject, IsOptional, IsString, Length, Matches, Max, Min } from 'class-validator';
 import { SesionGuard } from '../common/sesion.guard';
 import { serializar } from '../common/serializar';
 import { UsuarioActual } from '../common/usuario-actual';
@@ -29,7 +38,6 @@ import { CONFIGURACION, type Configuracion } from '../config/configuracion';
 import { Prisma, type Usuario } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-const BARRIOS = Object.keys(LOTES_POR_BARRIO) as Barrio[];
 const PRECIO = /^\d{1,9}(\.\d{1,7})?$/;
 
 class LocalDto {
@@ -37,8 +45,15 @@ class LocalDto {
   @Length(2, 40, { message: 'El nombre del local debe tener entre 2 y 40 caracteres' })
   nombre: string;
 
-  @IsIn(BARRIOS, { message: 'Elige un barrio: diseno, clases o tecnologia' })
+  /** Villa del local. Se aceptan también los nombres anteriores (diseno, clases, tecnologia). */
+  @Transform(({ value }) => (typeof value === 'string' ? (BARRIOS_ANTERIORES[value] ?? value) : value))
+  @IsIn(LISTA_BARRIOS, { message: 'Elige una villa: creativo, tech, audiovisual o academy' })
   barrio: Barrio;
+
+  /** Una categoría de la villa. Si no viene, se conserva la actual o se usa la primera de la villa. */
+  @IsOptional()
+  @IsString()
+  categoria?: string;
 
   @IsOptional()
   @IsString()
@@ -46,8 +61,13 @@ class LocalDto {
   descripcion?: string;
 
   @IsOptional()
-  @IsIn([...COLORES_LOCAL], { message: 'Color no permitido' })
+  @IsIn([...COLORES_LOCAL, ...COLORES_LOCAL_ANTERIORES], { message: 'Color no permitido' })
   color?: string;
+
+  /** Casa personalizada: piezas de la villa (se valida contra CATALOGO_CASA). */
+  @IsOptional()
+  @IsObject({ message: 'La apariencia de la casa debe ser un objeto' })
+  apariencia?: Record<string, unknown>;
 }
 
 class ServicioDto {
@@ -89,31 +109,52 @@ export class ServicesController {
     @Inject(CONFIGURACION) private readonly config: Configuracion,
   ) {}
 
-  /** Crea o actualiza el local del usuario. Asigna un lote libre del barrio elegido. */
+  /**
+   * Crea o actualiza el local del usuario.
+   * - Local nuevo o cambio de villa: se asigna el primer lote libre de la villa (sin tope; se reutilizan los huecos).
+   * - Misma villa: la casa conserva su lote.
+   */
   @Put('mi-local')
   async guardarLocal(@UsuarioActual() yo: Usuario, @Body() dto: LocalDto) {
     const actual = await this.prisma.local.findUnique({ where: { usuario_id: yo.id } });
+    const mismaVilla = actual?.barrio === dto.barrio;
+
+    const categoria = dto.categoria ?? (actual && mismaVilla ? actual.categoria : BARRIOS[dto.barrio].categorias[0].id);
+    if (!esCategoriaDe(dto.barrio, categoria)) {
+      throw new BadRequestException(`Esa categoría no es de la Villa ${BARRIOS[dto.barrio].nombre}`);
+    }
+    let apariencia: Prisma.InputJsonValue | undefined;
+    if (dto.apariencia !== undefined) {
+      const r = validarAparienciaCasa(dto.barrio, dto.apariencia);
+      if (!r.ok) throw new BadRequestException(r.error);
+      apariencia = { ...r.valor };
+    } else if (actual?.apariencia && !mismaVilla) {
+      // Cambio de villa sin casa nueva: se conservan las piezas compatibles con la villa nueva.
+      apariencia = { ...normalizarAparienciaCasa(dto.barrio, actual.apariencia) };
+    }
+
     const datos = {
       nombre: dto.nombre.trim(),
       barrio: dto.barrio,
+      categoria,
       descripcion: dto.descripcion?.trim() || null,
       color: dto.color ?? actual?.color ?? COLORES_LOCAL[0],
+      ...(apariencia === undefined ? {} : { apariencia }),
     };
-    if (actual && actual.barrio === dto.barrio) {
+    if (actual && mismaVilla) {
       return serializar(await this.prisma.local.update({ where: { id: actual.id }, data: datos }));
     }
-    // Local nuevo o cambio de barrio: buscar un lote libre (con reintento si otro lo toma a la vez).
-    for (let intento = 0; intento < 3; intento++) {
+    // Local nuevo o cambio de villa: primer lote libre (con reintento si otro lo toma a la vez).
+    for (let intento = 0; intento < 5; intento++) {
       const ocupados = await this.prisma.local.findMany({
-        where: { lote: { in: [...LOTES_POR_BARRIO[dto.barrio]] }, NOT: { usuario_id: yo.id } },
+        where: { barrio: dto.barrio, NOT: { usuario_id: yo.id } },
         select: { lote: true },
       });
-      const libre = LOTES_POR_BARRIO[dto.barrio].find((l) => !ocupados.some((o) => o.lote === l));
-      if (libre === undefined) throw new ConflictException('Ese barrio está lleno; elige otro');
+      const lote = primerLoteLibre(ocupados.map((o) => o.lote));
       try {
         const local = actual
-          ? await this.prisma.local.update({ where: { id: actual.id }, data: { ...datos, lote: libre } })
-          : await this.prisma.local.create({ data: { ...datos, lote: libre, usuario_id: yo.id } });
+          ? await this.prisma.local.update({ where: { id: actual.id }, data: { ...datos, lote } })
+          : await this.prisma.local.create({ data: { ...datos, lote, usuario_id: yo.id } });
         return serializar(local);
       } catch (e) {
         if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')) throw e;

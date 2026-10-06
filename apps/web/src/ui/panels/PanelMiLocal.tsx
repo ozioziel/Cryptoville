@@ -1,38 +1,83 @@
-import { BARRIOS, COLORES_LOCAL, MAX_SERVICIOS_POR_LOCAL, type Barrio, type Servicio } from '@cryptoville/shared';
-import { useState } from 'react';
+import {
+  BARRIOS,
+  CAMPOS_CASA,
+  CATALOGO_CASA,
+  COLORES_LOCAL,
+  LISTA_BARRIOS,
+  MAX_SERVICIOS_POR_LOCAL,
+  esCategoriaDe,
+  normalizarAparienciaCasa,
+  type AparienciaCasa,
+  type Barrio,
+  type CampoCasa,
+  type OpcionPieza,
+  type Servicio,
+} from '@cryptoville/shared';
+import { useMemo, useState } from 'react';
+import { crearCasa, crearInterior } from '../../arte/casa';
 import { useSesion } from '../../features/auth/sesion';
 import { emitir } from '../../game/EventBus';
 import { api, mensajeDeError } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import { useEstado } from '../estado';
 import { Aviso } from '../components/basicos';
+import { Pestanas, SelectorPieza } from '../components/Editor';
+import { Icono } from '../components/Iconos';
 
 const TAMANO_MAXIMO = 2 * 1024 * 1024;
 
-/** Abrir o editar el local propio y sus servicios. */
+/** Paleta cerrada para el toldo, la puerta y el letrero de la casa. */
+const COLORES_DUENO: readonly OpcionPieza[] = COLORES_LOCAL.map((color, i) => ({
+  id: color,
+  nombre: ['Coral', 'Azul', 'Verde', 'Mostaza', 'Lavanda', 'Salvia', 'Arena', 'Rosa'][i] ?? color,
+  color,
+}));
+
+/** Abrir o editar el local propio, su casa (por fuera y por dentro) y sus servicios. */
 export function PanelMiLocal() {
   const { usuario, local, recargar } = useSesion();
-  const { locales, recargarPueblo, notificar } = useEstado();
+  const { locales, recargarPueblo, notificar, villa } = useEstado();
   const [nombre, setNombre] = useState(local?.nombre ?? '');
-  const [barrio, setBarrio] = useState<Barrio>(local?.barrio ?? 'diseno');
+  const [barrio, setBarrio] = useState<Barrio>(local?.barrio ?? villa);
+  const [categoria, setCategoria] = useState<string>(local?.categoria ?? BARRIOS[local?.barrio ?? villa].categorias[0].id);
   const [color, setColor] = useState<string>(local?.color ?? COLORES_LOCAL[0]);
   const [descripcion, setDescripcion] = useState(local?.descripcion ?? '');
+  const [casa, setCasa] = useState<AparienciaCasa>(() => normalizarAparienciaCasa(local?.barrio ?? villa, local?.apariencia));
+  const [parte, setParte] = useState<'exterior' | 'interior'>('exterior');
   const [editando, setEditando] = useState<Servicio | 'nuevo' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [guardando, setGuardando] = useState(false);
+
+  const vistaExterior = useMemo(() => crearCasa({ barrio, apariencia: casa, color, nombre: nombre.trim() || 'Tu local' }), [barrio, casa, color, nombre]);
+  const vistaInterior = useMemo(() => crearInterior({ barrio, apariencia: casa, color }), [barrio, casa, color]);
+
   if (!usuario) return <p className="tenue">Entra con tu wallet para abrir tu local.</p>;
 
   const servicios = locales.find((l) => l.usuario_id === usuario.id)?.servicios ?? [];
 
+  const cambiarVilla = (b: Barrio) => {
+    setBarrio(b);
+    // La categoría y las piezas de la casa tienen que ser de la villa nueva.
+    if (!esCategoriaDe(b, categoria)) setCategoria(BARRIOS[b].categorias[0].id);
+    setCasa((c) => normalizarAparienciaCasa(b, c));
+  };
+
   const guardarLocal = async () => {
     setError(null);
+    setGuardando(true);
     try {
-      const nuevo = await api<{ lote: number }>('/mi-local', { metodo: 'PUT', cuerpo: { nombre, barrio, color, descripcion } });
+      const nuevo = await api<{ lote: number; barrio: Barrio }>('/mi-local', {
+        metodo: 'PUT',
+        cuerpo: { nombre, barrio, categoria, color, descripcion, apariencia: casa },
+      });
       await recargar();
       await recargarPueblo();
-      emitir('ir-a-lote', nuevo.lote);
-      notificar(local ? 'Local actualizado' : `¡Abriste tu local en el lote ${nuevo.lote}!`);
+      emitir('ir-a-local', { barrio: nuevo.barrio, lote: nuevo.lote });
+      notificar(local ? 'Local actualizado' : `¡Abriste tu local en la Villa ${BARRIOS[nuevo.barrio].nombre}!`);
     } catch (e) {
       setError(mensajeDeError(e));
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -43,35 +88,67 @@ export function PanelMiLocal() {
       </label>
       <input id="nombre-local" className="campo" maxLength={40} value={nombre} onChange={(e) => setNombre(e.target.value)} />
       <label className="etiqueta" htmlFor="barrio">
-        Barrio
+        Villa
       </label>
-      <select id="barrio" className="campo" value={barrio} onChange={(e) => setBarrio(e.target.value as Barrio)}>
-        {(Object.keys(BARRIOS) as Barrio[]).map((b) => (
+      <select id="barrio" className="campo" value={barrio} onChange={(e) => cambiarVilla(e.target.value as Barrio)}>
+        {LISTA_BARRIOS.map((b) => (
           <option key={b} value={b}>
             {BARRIOS[b].nombre}: {BARRIOS[b].descripcion}
           </option>
         ))}
       </select>
-      <span className="etiqueta">Color del letrero</span>
-      <div className="fila">
-        {COLORES_LOCAL.map((c) => (
-          <button
-            key={c}
-            type="button"
-            className={`muestra-color ${c === color ? 'activo' : ''}`}
-            style={{ background: c }}
-            aria-label={`Color ${c}`}
-            aria-pressed={c === color}
-            onClick={() => setColor(c)}
-          />
+      {local && local.barrio !== barrio && (
+        <p className="tenue pequeno">Al cambiar de villa, tu casa se muda al primer lote libre de la Villa {BARRIOS[barrio].nombre}.</p>
+      )}
+      <label className="etiqueta" htmlFor="categoria">
+        Categoría
+      </label>
+      <select id="categoria" className="campo" value={categoria} onChange={(e) => setCategoria(e.target.value)}>
+        {BARRIOS[barrio].categorias.map((c) => (
+          <option key={c.id} value={c.id}>
+            {c.nombre}
+          </option>
         ))}
-      </div>
+      </select>
       <label className="etiqueta" htmlFor="desc-local">
         Descripción corta
       </label>
       <input id="desc-local" className="campo" maxLength={280} value={descripcion} onChange={(e) => setDescripcion(e.target.value)} />
-      <button type="button" className="boton boton-primario" disabled={nombre.trim().length < 2} onClick={guardarLocal}>
-        {local ? 'Guardar cambios' : 'Abrir mi local'}
+
+      <section className="editor" aria-label="Tu casa">
+        <span className="etiqueta">Tu casa</span>
+        <Pestanas
+          etiqueta="Parte de la casa"
+          opciones={[
+            { id: 'exterior', nombre: 'Por fuera' },
+            { id: 'interior', nombre: 'Por dentro' },
+          ]}
+          valor={parte}
+          onCambiar={setParte}
+        />
+        <div
+          className={`editor-vista editor-vista-${parte}`}
+          role="img"
+          aria-label={parte === 'exterior' ? 'Vista previa de la casa por fuera' : 'Vista previa de la casa por dentro'}
+          dangerouslySetInnerHTML={{ __html: parte === 'exterior' ? vistaExterior : vistaInterior }}
+        />
+        {parte === 'exterior' && (
+          <SelectorPieza etiqueta="Color del toldo, la puerta y el letrero" opciones={COLORES_DUENO} valor={color} onCambiar={setColor} />
+        )}
+        {CAMPOS_CASA.filter((c) => c.parte === parte).map(({ campo, nombre: etiqueta }) => (
+          <SelectorPieza
+            key={campo}
+            etiqueta={etiqueta}
+            opciones={CATALOGO_CASA[barrio][campo as CampoCasa]}
+            valor={casa[campo]}
+            onCambiar={(v) => setCasa((c) => ({ ...c, [campo]: v }))}
+          />
+        ))}
+        <p className="tenue pequeno">Las piezas son del estilo de la Villa {BARRIOS[barrio].nombre}, para que la villa conserve su identidad.</p>
+      </section>
+
+      <button type="button" className="boton boton-primario" disabled={nombre.trim().length < 2 || guardando} onClick={guardarLocal}>
+        {guardando ? 'Guardando…' : local ? 'Guardar cambios' : 'Abrir mi local'}
       </button>
       {error && <Aviso tipo="peligro">{error}</Aviso>}
 
@@ -80,14 +157,16 @@ export function PanelMiLocal() {
           <h3>
             Mis servicios ({servicios.length}/{MAX_SERVICIOS_POR_LOCAL})
           </h3>
-          <ul className="lista-simple">
+          <ul className="lista-tarjetas">
             {servicios.map((s) => (
-              <li key={s.id} className="fila espaciada">
-                <span>
-                  {s.titulo} · <strong>{s.precio_usdc} USDC</strong>
+              <li key={s.id} className="servicio">
+                <span className="servicio-texto">
+                  <b>{s.titulo}</b>
+                  <span className="tenue">Entrega en {s.dias_entrega} días</span>
                 </span>
+                <span className="precio">{s.precio_usdc} USDC</span>
                 <button type="button" className="boton boton-mini" onClick={() => setEditando(s)}>
-                  Editar
+                  <Icono nombre="editar" tamano={14} /> Editar
                 </button>
               </li>
             ))}
@@ -105,7 +184,7 @@ export function PanelMiLocal() {
           ) : (
             servicios.length < MAX_SERVICIOS_POR_LOCAL && (
               <button type="button" className="boton" onClick={() => setEditando('nuevo')}>
-                + Nuevo servicio
+                <Icono nombre="mas" /> Nuevo servicio
               </button>
             )
           )}
@@ -180,7 +259,7 @@ function FormularioServicio({
       </div>
       <label className="etiqueta">
         Foto (opcional, hasta 2 MB)
-        <input type="file" accept="image/png,image/jpeg,image/webp" disabled={subiendo} onChange={(e) => e.target.files?.[0] && subirFoto(e.target.files[0])} />
+        <input type="file" className="campo-archivo" accept="image/png,image/jpeg,image/webp" disabled={subiendo} onChange={(e) => e.target.files?.[0] && subirFoto(e.target.files[0])} />
       </label>
       {subiendo && <span className="tenue pequeno">Subiendo…</span>}
       {foto && <img src={foto} alt="" className="tarjeta-foto" />}

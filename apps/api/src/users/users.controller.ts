@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Module, Patch, UseGuards } from '@nestjs/common';
-import { IsIn, IsOptional, IsString, Length } from 'class-validator';
-import { AVATARES } from '@cryptoville/shared';
+import { BadRequestException, Body, Controller, Get, Module, Patch, UseGuards } from '@nestjs/common';
+import { IsIn, IsObject, IsOptional, IsString, Length, ValidateIf } from 'class-validator';
+import { AVATARES, validarAparienciaPersona } from '@cryptoville/shared';
 import { SesionGuard } from '../common/sesion.guard';
 import { serializar } from '../common/serializar';
 import { UsuarioActual } from '../common/usuario-actual';
-import type { Usuario } from '../generated/prisma/client';
+import { Prisma, type Usuario } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 class PerfilDto {
@@ -18,9 +18,15 @@ class PerfilDto {
   @Length(0, 280, { message: 'La presentación puede tener hasta 280 caracteres' })
   bio?: string;
 
+  /** Personaje de Kenney (se sigue aceptando; si no hay `apariencia`, se dibuja la persona equivalente). */
   @IsOptional()
   @IsIn([...AVATARES], { message: 'Elige uno de los personajes disponibles' })
   avatar?: number;
+
+  /** Persona en vectores, validada contra el catálogo de packages/shared. `null` vuelve al personaje de `avatar`. */
+  @ValidateIf((_, v) => v !== undefined && v !== null)
+  @IsObject({ message: 'La apariencia del personaje debe ser un objeto' })
+  apariencia?: Record<string, unknown> | null;
 }
 
 @Controller('yo')
@@ -36,12 +42,20 @@ export class UsersController {
 
   @Patch()
   async actualizar(@UsuarioActual() yo: Usuario, @Body() dto: PerfilDto) {
+    let apariencia: Prisma.InputJsonValue | typeof Prisma.DbNull | undefined;
+    if (dto.apariencia === null) apariencia = Prisma.DbNull;
+    else if (dto.apariencia !== undefined) {
+      const r = validarAparienciaPersona(dto.apariencia);
+      if (!r.ok) throw new BadRequestException(r.error);
+      apariencia = { ...r.valor };
+    }
     const usuario = await this.prisma.usuario.update({
       where: { id: yo.id },
       data: {
         nombre: dto.nombre?.trim(),
         bio: dto.bio === undefined ? undefined : dto.bio.trim() || null,
         avatar: dto.avatar,
+        apariencia,
       },
     });
     return serializar(usuario);

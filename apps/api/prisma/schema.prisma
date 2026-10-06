@@ -22,10 +22,13 @@ enum Rol {
   arbitro
 }
 
+/// Villas del pueblo (en el código el campo se sigue llamando `barrio`).
+/// Antes: diseno → creativo, clases → academy, tecnologia → tech (migración 20261006000100_villas).
 enum Barrio {
-  diseno
-  clases
-  tecnologia
+  creativo
+  academy
+  tech
+  audiovisual
 }
 
 enum EstadoPedido {
@@ -69,6 +72,24 @@ enum TipoAviso {
   disputa_resuelta
   pedido_cerrado
   nuevo_mensaje
+  nueva_propuesta
+  propuesta_aceptada
+  busqueda_cerrada
+}
+
+/// Estado de un «Se busca».
+enum EstadoBusqueda {
+  abierta
+  asignada
+  cancelada
+}
+
+/// Estado de una propuesta a un «Se busca».
+enum EstadoPropuesta {
+  enviada
+  aceptada
+  rechazada
+  retirada
 }
 
 model Usuario {
@@ -77,6 +98,8 @@ model Usuario {
   nombre    String
   bio       String?
   avatar    Int      @default(85)
+  /// Persona en vectores (packages/shared/src/apariencia.ts). Si es null, se dibuja la equivalente a `avatar`.
+  apariencia Json?
   rol       Rol      @default(usuario)
   creado_en DateTime @default(now()) @db.Timestamptz(3)
 
@@ -90,6 +113,8 @@ model Usuario {
   resenasEscritas  Resena[]     @relation("autor")
   resenasRecibidas Resena[]     @relation("destinatario")
   avisos           Aviso[]
+  busquedas        Busqueda[]   @relation("busquedasAutor")
+  propuestas       Propuesta[]  @relation("propuestasProveedor")
 
   @@map("usuarios")
 }
@@ -112,9 +137,13 @@ model Local {
   usuario_id  String   @unique @db.Uuid
   nombre      String
   barrio      Barrio
-  /// Lote del mapa (1-4 Diseño, 5-8 Clases, 9-12 Tecnología).
-  lote        Int      @unique
+  /// Número de lote dentro de su villa (1, 2, 3…, sin tope). Define el lugar de la casa en el mapa.
+  lote        Int
+  /// Una de las categorías de su villa (CHECK "locales_categoria_check").
+  categoria   String
   color       String   @default("#e07a5f")
+  /// Casa personalizada (piezas de su villa). Si es null, se usa la casa por defecto de la villa.
+  apariencia  Json?
   descripcion String?
   activo      Boolean  @default(true)
   creado_en   DateTime @default(now()) @db.Timestamptz(3)
@@ -122,6 +151,7 @@ model Local {
   usuario   Usuario    @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
   servicios Servicio[]
 
+  @@unique([barrio, lote])
   @@map("locales")
 }
 
@@ -134,10 +164,13 @@ model Servicio {
   dias_entrega Int
   foto_url     String?
   activo       Boolean  @default(true)
+  /// Si el servicio nació de una propuesta a un «Se busca» (queda inactivo: no se muestra en el local).
+  busqueda_id  String?  @db.Uuid
   creado_en    DateTime @default(now()) @db.Timestamptz(3)
 
-  local   Local    @relation(fields: [local_id], references: [id], onDelete: Cascade)
-  pedidos Pedido[]
+  local    Local     @relation(fields: [local_id], references: [id], onDelete: Cascade)
+  pedidos  Pedido[]
+  busqueda Busqueda? @relation(fields: [busqueda_id], references: [id], onDelete: SetNull)
 
   @@index([local_id])
   @@map("servicios")
@@ -167,6 +200,7 @@ model Pedido {
   disputa   Disputa?
   resenas   Resena[]
   avisos    Aviso[]
+  busqueda  Busqueda?
 
   @@index([cliente_id])
   @@index([proveedor_id])
@@ -241,17 +275,73 @@ model Resena {
 }
 
 model Aviso {
-  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  usuario_id String    @db.Uuid
-  pedido_id  String?   @db.Uuid
-  tipo       TipoAviso
-  texto      String
-  leido      Boolean   @default(false)
-  creado_en  DateTime  @default(now()) @db.Timestamptz(3)
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id  String    @db.Uuid
+  pedido_id   String?   @db.Uuid
+  /// «Se busca» al que se refiere el aviso (propuestas).
+  busqueda_id String?   @db.Uuid
+  tipo        TipoAviso
+  texto       String
+  leido       Boolean   @default(false)
+  creado_en   DateTime  @default(now()) @db.Timestamptz(3)
 
-  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
-  pedido  Pedido? @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  usuario  Usuario   @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  pedido   Pedido?   @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  busqueda Busqueda? @relation(fields: [busqueda_id], references: [id], onDelete: Cascade)
 
   @@index([usuario_id, leido])
   @@map("avisos")
+}
+
+/// «Se busca»: alguien publica lo que necesita y los proveedores le mandan propuestas.
+/// Al elegir una propuesta nace un pedido ya aceptado (con un servicio inactivo del proveedor).
+model Busqueda {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  autor_id         String         @db.Uuid
+  titulo           String
+  descripcion      String
+  barrio           Barrio
+  categoria        String
+  /// Lugar de su casa en el modo «Quiero trabajar» de la villa (primer número libre entre los visibles).
+  lote             Int            @default(1)
+  presupuesto_usdc Decimal        @db.Decimal(20, 7)
+  fecha_limite     DateTime       @db.Timestamptz(3)
+  estado           EstadoBusqueda @default(abierta)
+  /// Propuestas vigentes (enviadas o la elegida). La mantiene la API.
+  total_propuestas Int            @default(0)
+  /// Pedido que nació de la propuesta elegida.
+  pedido_id        String?        @unique @db.Uuid
+  creado_en        DateTime       @default(now()) @db.Timestamptz(3)
+  actualizado_en   DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
+
+  autor      Usuario     @relation("busquedasAutor", fields: [autor_id], references: [id], onDelete: Cascade)
+  pedido     Pedido?     @relation(fields: [pedido_id], references: [id], onDelete: SetNull)
+  propuestas Propuesta[]
+  servicios  Servicio[]
+  avisos     Aviso[]
+
+  @@index([estado, barrio])
+  @@index([autor_id])
+  @@index([barrio, lote])
+  @@map("busquedas")
+}
+
+/// Propuesta de un proveedor (con local) a un «Se busca». Una por proveedor; se puede editar o retirar.
+model Propuesta {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  busqueda_id    String          @db.Uuid
+  proveedor_id   String          @db.Uuid
+  monto_usdc     Decimal         @db.Decimal(20, 7)
+  dias_entrega   Int
+  mensaje        String
+  estado         EstadoPropuesta @default(enviada)
+  creado_en      DateTime        @default(now()) @db.Timestamptz(3)
+  actualizado_en DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+
+  busqueda  Busqueda @relation(fields: [busqueda_id], references: [id], onDelete: Cascade)
+  proveedor Usuario  @relation("propuestasProveedor", fields: [proveedor_id], references: [id], onDelete: Cascade)
+
+  @@unique([busqueda_id, proveedor_id])
+  @@index([proveedor_id])
+  @@map("propuestas")
 }

@@ -37,8 +37,11 @@ export function PanelAvisos() {
           <button
             type="button"
             className={`tarjeta ${a.leido ? '' : 'tarjeta-nueva'}`}
-            disabled={!a.pedido_id}
-            onClick={() => a.pedido_id && abrir({ tipo: 'pedido', id: a.pedido_id })}
+            disabled={!a.pedido_id && !a.busqueda_id}
+            onClick={() => {
+              if (a.pedido_id) abrir({ tipo: 'pedido', id: a.pedido_id });
+              else if (a.busqueda_id) abrir({ tipo: 'busqueda', id: a.busqueda_id });
+            }}
           >
             <span>{a.texto}</span>
             <span className="tenue pequeno">{fechaCorta(a.creado_en)}</span>

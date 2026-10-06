@@ -1,8 +1,12 @@
 import Phaser from 'phaser';
 
+/** @deprecated La interfaz ya no usa Pixelify Sans: ver FUENTE en game/texturas.ts. */
 export const FUENTE_PIXEL = '"Pixelify Sans", monospace';
 
-/** Letrero con el nombre del local, encima de la casa. */
+/**
+ * Letrero con el nombre del local, encima de la casa.
+ * @deprecated Era del pueblo con tiles de Kenney (scenes/Pueblo.ts). Las villas escriben el nombre sobre el letrero de cada casa.
+ */
 export class Letrero extends Phaser.GameObjects.Container {
   private fondo: Phaser.GameObjects.Rectangle;
   private texto: Phaser.GameObjects.Text;

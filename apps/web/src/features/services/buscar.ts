@@ -3,7 +3,10 @@ import type { LocalDelPueblo } from './datos';
 
 export interface Filtros {
   texto: string;
+  /** Villa (el campo se sigue llamando barrio). */
   barrio: Barrio | 'todos';
+  /** Categoría del local (opcional, para no romper llamadas anteriores). */
+  categoria?: string | 'todas';
   precioMaximo: number | null;
 }
 
@@ -24,6 +27,7 @@ export function buscarServicios(locales: LocalDelPueblo[], f: Filtros): Resultad
   const resultados: Resultado[] = [];
   for (const local of locales) {
     if (f.barrio !== 'todos' && local.barrio !== f.barrio) continue;
+    if (f.categoria && f.categoria !== 'todas' && local.categoria !== f.categoria) continue;
     for (const servicio of local.servicios) {
       if (f.precioMaximo !== null && Number(servicio.precio_usdc) > f.precioMaximo) continue;
       const texto = normalizar(`${servicio.titulo} ${servicio.descripcion} ${local.nombre} ${local.usuario.nombre}`);

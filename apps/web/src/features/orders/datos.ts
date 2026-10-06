@@ -4,7 +4,8 @@ import type { UsuarioPublico } from '../services/datos';
 
 export interface PedidoResumen extends Pedido {
   es_ejemplo: boolean;
-  servicio: { titulo: string };
+  /** `busqueda_id`: el pedido nació de una propuesta a un «Se busca». */
+  servicio: { titulo: string; busqueda_id?: string | null };
   cliente: UsuarioPublico;
   proveedor: UsuarioPublico;
 }
@@ -16,9 +17,9 @@ export interface PedidoDetalle extends PedidoResumen {
   resenas: Resena[];
 }
 
-const CAMPOS_USUARIO = 'id, nombre, avatar, direccion, bio, rol';
+const CAMPOS_USUARIO = 'id, nombre, avatar, apariencia, direccion, bio, rol';
 const SELECT_RESUMEN =
-  `*, servicio:servicios(titulo), cliente:usuarios!pedidos_cliente_id_fkey(${CAMPOS_USUARIO}), ` +
+  `*, servicio:servicios(titulo, busqueda_id), cliente:usuarios!pedidos_cliente_id_fkey(${CAMPOS_USUARIO}), ` +
   `proveedor:usuarios!pedidos_proveedor_id_fkey(${CAMPOS_USUARIO})`;
 
 const normalizar = <T extends Pedido>(p: T): T => ({ ...p, monto_usdc: formatoUsdc(p.monto_usdc), numero: Number(p.numero) });

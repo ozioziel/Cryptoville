@@ -27,7 +27,7 @@ La app **no se conecta a Stellar**. Quien hace un paso lo firma en el Lab y pega
 | 2 | Token de pago | «USDC de prueba», token SEP-41 (`contracts/usdc-prueba`) emitido por el admin | Stellar testnet, desplegado desde Stellar Lab | Moneda de la demo. En mainnet se reemplaza por el USDC real |
 | 3 | Stellar Lab | lab.stellar.org | Navegador | Desplegar, emitir, llamar funciones, firmar y revisar transacciones |
 | 4 | Web: paneles | React 19 + Vite + `supabase-js` | Navegador (servida por Caddy) | Servicios, pedidos, pasos en el Lab, chat, perfiles, reseñas, disputas, panel del árbitro, buscador |
-| 5 | Web: pueblo | Phaser 3 + mapa de Tiled + gráficos de Kenney | Navegador | 1 mapa, 3 barrios, 12 lotes, interiores, teclado y joystick táctil |
+| 5 | Web: villas | Phaser 3 + arte vectorial en SVG (`apps/web/src/arte`) | Navegador | 4 villas (una escena cada una) que crecen sin tope de lotes, edificio central con datos curiosos, interiores personalizables, personajes en vectores, teclado y joystick táctil |
 | 6 | Wallets | Stellar Wallets Kit | Navegador | Solo para iniciar sesión (firma SEP-53) |
 | 7 | API | NestJS 11 + Prisma 7 | Docker en el VPS | Sesión, locales, servicios, pedidos (máquina de estados), pasos, disputas, reseñas, avisos, permisos de subida |
 | 8 | Base de datos | Supabase Postgres + RLS | Supabase | Datos de la app y vista `reputacion` |
@@ -102,9 +102,10 @@ Todas están documentadas en `.env.example` (producción) y `.env.local.example`
 cryptoville/
 ├── apps/
 │   ├── web/                      # React + Phaser
-│   │   ├── public/assets/        # gráficos de Kenney y mapa de Tiled (pueblo.json)
+│   │   ├── public/assets/        # gráficos de Kenney y mapa de Tiled del pueblo anterior (se conservan, ya no se usan)
 │   │   └── src/
-│   │       ├── game/             # EventBus, escenas (Arranque, Pueblo, Interior), objetos
+│   │       ├── arte/             # dibujos en SVG: personas, casas (exterior e interior) y villas
+│   │       ├── game/             # EventBus, escenas (Arranque, Villa ×4, Interior), plano de lotes, texturas
 │   │       ├── ui/               # componentes, paneles y estado global
 │   │       ├── features/         # auth, services, orders, escrow (pasos en el Lab)
 │   │       └── lib/              # api, supabase, config
@@ -117,7 +118,8 @@ cryptoville/
 │   ├── escrow/                   # contrato de garantía + pruebas
 │   ├── usdc-prueba/              # token de la demo + pruebas
 │   └── dist/                     # .wasm listos para subir al Lab
-├── packages/shared/              # tipos, estados, datos del contrato, enlaces al Lab
+├── packages/shared/              # tipos, estados, datos del contrato, enlaces al Lab, villas y categorías,
+│                                 # catálogo de personas y casas, datos curiosos
 ├── supabase/config.toml          # Supabase local (desarrollo)
 ├── scripts/                      # setup local, compilar contratos, llaves de ejemplo, mapa
 ├── deploy/                       # docker-compose, Dockerfiles, Caddyfile, setup-vps.sh, deploy.sh
@@ -129,6 +131,26 @@ cryptoville/
 | Parte | Cantidad | Qué cubren |
 |---|---|---|
 | Contratos (Rust) | 32 + 1 manual | Camino feliz, cada error, vencimientos, comisión, disputas, permisos, upgrade con el `.wasm` real, escrow + USDC de prueba |
-| Shared (Vitest) | 13 | Transiciones, montos, argumentos del Lab, enlaces, reputación |
-| API (Jest + Supabase local) | 13 | Inicio de sesión, transiciones válidas e inválidas, hashes repetidos, permisos del árbitro, RLS |
-| Web (Vitest) | 10 | Firma local, buscador, acciones por rol y plazo, zoom |
+| Shared (Vitest) | 32 | Transiciones, montos, argumentos del Lab, enlaces, reputación, villas y categorías, numeración de lotes, catálogo y validación de apariencias, conversión de los personajes viejos, datos curiosos, reglas de «Se busca» |
+| API (Jest + Supabase local) | 23 | Inicio de sesión, transiciones válidas e inválidas, hashes repetidos, permisos del árbitro, RLS, lotes por villa, categorías, apariencias, «Se busca» y propuestas |
+| Web (Vitest) | 23 | Firma local, buscador (con categoría), filtro de «Se busca», acciones por rol y plazo, plano de las villas, zoom, dibujo en vectores |
+
+## Villas (desde el rediseño)
+
+- **Datos:** el campo se sigue llamando `barrio` (enum `Barrio`: `creativo`, `tech`, `audiovisual`, `academy`). Los valores viejos se renombraron con `ALTER TYPE … RENAME VALUE` (`diseno → creativo`, `tecnologia → tech`, `clases → academy`), así que no se perdió nada. La API sigue aceptando los nombres viejos.
+- **Lotes:** únicos por `(barrio, lote)` y sin tope (`lote >= 1`). La API asigna el primer número libre de la villa y reutiliza los huecos (`primerLoteLibre`). La posición de cada casa en el mapa sale solo de su número (`apps/web/src/game/plano.ts`), así que nunca cambia de lugar.
+- **Categoría:** columna `categoria` de `locales`, validada contra las categorías de su villa en la API y con un CHECK en la base.
+- **Apariencias:** columnas `apariencia` (jsonb) en `usuarios` y `locales`. La API las valida contra el catálogo de `packages/shared/src/apariencia.ts`. Si están vacías, se usa la persona equivalente al `avatar` (la columna se conserva) o la casa por defecto de la villa.
+- **Dibujo:** las personas, las casas y las villas son SVG generados por funciones puras (`crearPersona`, `crearCasa`, `crearInterior`). React los muestra directo; Phaser los convierte en texturas con la resolución que pide el zoom y el `devicePixelRatio`, y solo dibuja lo que está cerca de la cámara.
+
+## «Se busca»: el lado de la demanda
+
+- **Tablas:** `busquedas` (lo que alguien necesita: villa, categoría, presupuesto, fecha límite, estado `abierta | asignada | cancelada`) y `propuestas` (una por proveedor y «Se busca»: monto, días, mensaje, estado `enviada | aceptada | rechazada | retirada`).
+- **RLS:** los «Se busca» se leen en público; las propuestas solo las ven quien publicó, quien propuso y el árbitro. La web no escribe en ninguna de las dos.
+- **API:** `POST /api/busquedas`, `POST /api/busquedas/:id/cerrar`, `POST /api/busquedas/:id/propuestas` (mandar o editar; hace falta tener local), `POST /api/propuestas/:id/retirar` y `POST /api/propuestas/:id/aceptar`.
+- **Al aceptar una propuesta** se crea, en una transacción, un servicio inactivo en el local del proveedor (`servicios.busqueda_id`) y un pedido en estado `aceptado` con el monto y el plazo de la propuesta. Así el pedido sigue la misma máquina de estados y el mismo escrow que los demás, sin cambiar el contrato.
+- **Avisos:** `nueva_propuesta`, `propuesta_aceptada` y `busqueda_cerrada`; la columna `avisos.busqueda_id` lleva al «Se busca». Realtime publica `busquedas` y `propuestas`.
+- **Modo de la villa:** el interruptor «Quiero contratar» / «Quiero trabajar» (`modo` en `ui/estado.tsx`, evento `modo` del EventBus) rearma la escena de la villa con otras casas. En modo trabajar, cada «Se busca» abierto es una casa (evento `se-busca`), con la casa base de su villa, el cartel SE BUSCA y su autor en la puerta.
+- **Lote de cada «Se busca»:** columna `busquedas.lote`. La API asigna el primer número libre entre los visibles de la villa (abiertos y sin vencer), con un candado por villa (`pg_advisory_xact_lock`).
+- **Web:** la lupa de la barra abre la lista del modo actual (`ui/panels/PanelBuscar.tsx`, pestañas "Servicios" y "Se busca"; cambiar de pestaña cambia el modo). Los carteles están en `ui/components/Cartel.tsx`, y el detalle con las propuestas en `ui/panels/PanelBusqueda.tsx`.
+

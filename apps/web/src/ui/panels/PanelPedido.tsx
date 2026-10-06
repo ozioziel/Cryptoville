@@ -8,12 +8,13 @@ import { api, mensajeDeError } from '../../lib/api';
 import { obtenerConfig } from '../../lib/config';
 import { useEstado } from '../estado';
 import { Aviso, Avatar, Cargando, EstadoPedidoBadge, fechaCorta } from '../components/basicos';
+import { Icono } from '../components/Iconos';
 
 const ROL_TEXTO = { cliente: 'Eres el cliente', proveedor: 'Eres el proveedor', arbitro: 'Eres el árbitro' } as const;
 
 export function PanelPedido({ id }: { id: string }) {
   const { usuario } = useSesion();
-  const { version, refrescar, notificar } = useEstado();
+  const { version, refrescar, notificar, abrir } = useEstado();
   const [pedido, setPedido] = useState<PedidoDetalle | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [abierta, setAbierta] = useState<string | null>(null);
@@ -55,6 +56,11 @@ export function PanelPedido({ id }: { id: string }) {
           <span className="tenue pequeno">
             Pedido #{pedido.numero} · {ROL_TEXTO[rol]}
           </span>
+          {pedido.servicio.busqueda_id && (
+            <button type="button" className="chip chip-oro chip-boton" onClick={() => abrir({ tipo: 'busqueda', id: pedido.servicio.busqueda_id! })}>
+              <Icono nombre="chincheta" tamano={13} /> Nació de un «Se busca»
+            </button>
+          )}
         </div>
         <EstadoPedidoBadge estado={pedido.estado} />
       </div>
@@ -64,11 +70,11 @@ export function PanelPedido({ id }: { id: string }) {
         <dd className="precio">{pedido.monto_usdc} USDC</dd>
         <dt>Cliente</dt>
         <dd className="fila">
-          <Avatar frame={pedido.cliente.avatar} tamano={20} /> {pedido.cliente.nombre}
+          <Avatar frame={pedido.cliente.avatar} apariencia={pedido.cliente.apariencia} tamano={24} /> {pedido.cliente.nombre}
         </dd>
         <dt>Proveedor</dt>
         <dd className="fila">
-          <Avatar frame={pedido.proveedor.avatar} tamano={20} /> {pedido.proveedor.nombre}
+          <Avatar frame={pedido.proveedor.avatar} apariencia={pedido.proveedor.apariencia} tamano={24} /> {pedido.proveedor.nombre}
         </dd>
         <dt>Fecha límite</dt>
         <dd>{fechaCorta(pedido.fecha_limite)}</dd>
@@ -105,7 +111,7 @@ export function PanelPedido({ id }: { id: string }) {
               {p.hash && (
                 <div className="fila pequeno">
                   <a href={enlaceTransaccion(p.hash, config.red)} target="_blank" rel="noreferrer">
-                    Ver transacción en Stellar Lab ↗
+                    Ver transacción en Stellar Lab <Icono nombre="enlace" tamano={14} />
                   </a>
                   {p.verificado_por ? (
                     <span className="badge badge-exito">Verificada</span>
@@ -308,7 +314,9 @@ function Chat({ pedido, usuarioId, rol, onError }: { pedido: PedidoDetalle; usua
 
   return (
     <section className="chat">
-      <h3>Chat del pedido</h3>
+      <h3>
+        <Icono nombre="chat" /> Chat del pedido
+      </h3>
       <ul>
         {pedido.mensajes.map((m) => (
           <li key={m.id} className={m.autor_id === usuarioId ? 'mio' : ''}>
@@ -338,7 +346,7 @@ function Chat({ pedido, usuarioId, rol, onError }: { pedido: PedidoDetalle; usua
           }}
         >
           <input className="campo" placeholder="Escribe un mensaje…" maxLength={1000} value={texto} onChange={(e) => setTexto(e.target.value)} />
-          <button type="submit" className="boton">
+          <button type="submit" className="boton boton-primario">
             Enviar
           </button>
         </form>

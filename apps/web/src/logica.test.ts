@@ -1,12 +1,18 @@
-// Pruebas de la lógica de la web (sin navegador): firma local, búsqueda, pasos del pedido y zoom.
+// Pruebas de la lógica de la web (sin navegador): firma local, búsqueda, pasos del pedido, plano de las villas,
+// zoom y dibujo en vectores.
+import { APARIENCIA_POR_AVATAR, AVATARES, LISTA_BARRIOS, casaPorDefecto } from '@cryptoville/shared';
 import { Keypair } from '@stellar/stellar-sdk';
 import { describe, expect, it } from 'vitest';
 import { accionesPara, argumentosPara, rolEnPedido } from './features/escrow/pasos';
 import { firmanteDesdeSecreta, hashSep53 } from './features/auth/firma-local';
 import type { PedidoDetalle } from './features/orders/datos';
+import { filtrarSeBusca } from './features/busquedas/filtrar';
 import { buscarServicios } from './features/services/buscar';
 import type { LocalDelPueblo } from './features/services/datos';
-import { zoomPara } from './game/zoom';
+import { crearCasa, crearInterior } from './arte/casa';
+import { crearPersona } from './arte/persona';
+import * as plano from './game/plano';
+import { resolucionTexturas, zoomPara, zoomVilla } from './game/zoom';
 
 describe('firma local (modo desarrollo)', () => {
   it('deriva la misma dirección que stellar-sdk y firma SEP-53 verificable', async () => {
@@ -26,14 +32,22 @@ describe('firma local (modo desarrollo)', () => {
   });
 });
 
-const usuario = (id: string, nombre: string) => ({ id, nombre, avatar: 85, direccion: 'G'.padEnd(56, 'A'), bio: null, rol: 'usuario' as const });
-const local = (id: string, barrio: 'diseno' | 'clases', nota: number | null, servicios: [string, string][]): LocalDelPueblo => ({
+const usuario = (id: string, nombre: string) => ({ id, nombre, avatar: 85, apariencia: null, direccion: 'G'.padEnd(56, 'A'), bio: null, rol: 'usuario' as const });
+const local = (
+  id: string,
+  barrio: 'creativo' | 'academy',
+  nota: number | null,
+  servicios: [string, string][],
+  categoria = barrio === 'creativo' ? 'diseno-grafico' : 'idiomas',
+): LocalDelPueblo => ({
   id,
   usuario_id: `u-${id}`,
   nombre: `Local ${id}`,
   barrio,
   lote: 1,
+  categoria,
   color: '#fff',
+  apariencia: null,
   descripcion: null,
   activo: true,
   usuario: usuario(`u-${id}`, `Persona ${id}`),
@@ -52,18 +66,27 @@ const local = (id: string, barrio: 'diseno' | 'clases', nota: number | null, ser
 
 describe('buscador', () => {
   const locales = [
-    local('a', 'diseno', 4, [['Diseño de logo', '40'], ['Ilustración', '25']]),
-    local('b', 'clases', 5, [['Clase de inglés', '12'], ['Logotipo express', '15']]),
+    local('a', 'creativo', 4, [['Diseño de logo', '40'], ['Ilustración', '25']]),
+    local('b', 'academy', 5, [['Clase de inglés', '12'], ['Logotipo express', '15']]),
+    local('c', 'academy', null, [['Curso de Rust', '30']], 'programacion'),
   ];
   it('busca sin importar acentos ni mayúsculas', () => {
     expect(buscarServicios(locales, { texto: 'DISENO', barrio: 'todos', precioMaximo: null }).map((r) => r.servicio.titulo)).toEqual(['Diseño de logo']);
   });
-  it('filtra por barrio y precio y ordena por reputación', () => {
+  it('filtra por villa y precio y ordena por reputación', () => {
     expect(buscarServicios(locales, { texto: 'logo', barrio: 'todos', precioMaximo: null }).map((r) => r.servicio.titulo)).toEqual([
       'Logotipo express',
       'Diseño de logo',
     ]);
-    expect(buscarServicios(locales, { texto: '', barrio: 'diseno', precioMaximo: 30 }).map((r) => r.servicio.titulo)).toEqual(['Ilustración']);
+    expect(buscarServicios(locales, { texto: '', barrio: 'creativo', precioMaximo: 30 }).map((r) => r.servicio.titulo)).toEqual(['Ilustración']);
+  });
+  it('filtra por categoría', () => {
+    const titulos = (f: Parameters<typeof buscarServicios>[1]) => buscarServicios(locales, f).map((r) => r.servicio.titulo);
+    expect(titulos({ texto: '', barrio: 'todos', categoria: 'programacion', precioMaximo: null })).toEqual(['Curso de Rust']);
+    expect(titulos({ texto: '', barrio: 'academy', categoria: 'idiomas', precioMaximo: 13 })).toEqual(['Clase de inglés']);
+    expect(titulos({ texto: '', barrio: 'todos', categoria: 'todas', precioMaximo: null })).toHaveLength(5);
+    // Sin categoría (como las llamadas de antes) no se filtra por categoría.
+    expect(titulos({ texto: '', barrio: 'todos', precioMaximo: null })).toHaveLength(5);
   });
 });
 
@@ -124,11 +147,141 @@ describe('pasos del pedido', () => {
   });
 });
 
+describe('Se busca: filtro de carteles', () => {
+  const sb = (id: string, barrio: 'creativo' | 'academy', categoria: string, titulo: string, presupuesto: string) => ({
+    id,
+    autor_id: 'a',
+    titulo,
+    descripcion: 'Detalle de lo que necesito',
+    barrio,
+    categoria,
+    lote: Number(id),
+    presupuesto_usdc: presupuesto,
+    fecha_limite: new Date(Date.now() + 5 * 86_400_000).toISOString(),
+    estado: 'abierta' as const,
+    total_propuestas: 0,
+    pedido_id: null,
+    creado_en: new Date().toISOString(),
+    actualizado_en: new Date().toISOString(),
+  });
+  const carteles = [
+    sb('1', 'creativo', 'diseno-grafico', 'Logo para mi cafetería', '40'),
+    sb('2', 'academy', 'idiomas', 'Clases de inglés', '15'),
+    sb('3', 'creativo', 'ilustracion', 'Ilustración para un libro', '90'),
+  ];
+  const ids = (f: Partial<Parameters<typeof filtrarSeBusca>[1]>) =>
+    filtrarSeBusca(carteles, { texto: '', barrio: 'todos', categoria: 'todas', presupuestoMinimo: null, ...f }).map((b) => b.id);
+
+  it('busca sin importar acentos y filtra por villa y categoría', () => {
+    expect(ids({ texto: 'CAFETERIA' })).toEqual(['1']);
+    expect(ids({ texto: 'ingles' })).toEqual(['2']);
+    expect(ids({ barrio: 'creativo' })).toEqual(['1', '3']);
+    expect(ids({ categoria: 'ilustracion' })).toEqual(['3']);
+  });
+
+  it('para quien busca trabajo: presupuesto mínimo', () => {
+    expect(ids({ presupuestoMinimo: 40 })).toEqual(['1', '3']);
+    expect(ids({ presupuestoMinimo: 100 })).toEqual([]);
+  });
+});
+
+describe('plano de las villas', () => {
+  it('cada lote tiene su propio lugar y nunca se sale del mapa', () => {
+    const vistos = new Set<string>();
+    for (let lote = 1; lote <= 300; lote++) {
+      const p = plano.posicionDeLote(lote);
+      const clave = `${p.x},${p.y}`;
+      expect(vistos.has(clave)).toBe(false);
+      vistos.add(clave);
+      expect(p.x).toBeGreaterThanOrEqual(0);
+      expect(p.x + 150).toBeLessThanOrEqual(plano.ANCHO_VILLA);
+    }
+  });
+
+  it('la posición depende solo del número de lote', () => {
+    // Abrir o cerrar otros locales no cambia nada: es una función del número.
+    expect(plano.posicionDeLote(37)).toEqual({ ...plano.posicionDeLote(37) });
+    expect(plano.posicionDeLote(1)).toEqual({ x: plano.MARGEN_X, y: plano.PRIMERA_FILA_Y });
+  });
+
+  it('la primera fila deja libre el centro para el edificio central y la estatua', () => {
+    expect(plano.lotesDeFila(0)).toEqual([1, 2, 3, 4]);
+    for (const lote of plano.lotesDeFila(0)) {
+      const p = plano.posicionDeLote(lote);
+      expect(p.x + 150 < plano.CENTRO_X - 200 || p.x > plano.CENTRO_X + 200).toBe(true);
+    }
+    expect(plano.lotesDeFila(1)).toEqual([5, 6, 7, 8, 9, 10, 11]);
+  });
+
+  it('se abren filas a medida que la villa se llena', () => {
+    expect(plano.filasNecesarias([])).toBe(2);
+    expect(plano.filasNecesarias([1, 2, 12])).toBe(3);
+    expect(plano.filasNecesarias([500])).toBeGreaterThan(70);
+    expect(plano.altoVilla(3)).toBeGreaterThan(plano.altoVilla(2));
+  });
+
+  it('la puerta de cada casa queda sobre la calle de su fila', () => {
+    for (const lote of [1, 4, 5, 20, 99]) {
+      const puerta = plano.puertaDeLote(lote);
+      const calle = plano.calleDeFila(plano.filaYColumna(lote).fila);
+      expect(puerta.y).toBeGreaterThanOrEqual(calle.y);
+      expect(puerta.y).toBeLessThan(calle.y + calle.alto);
+    }
+  });
+});
+
 describe('zoom del pueblo', () => {
   it('nunca menos de 2 ni más de 5, y entero', () => {
     expect(zoomPara(375, 812)).toBe(2);
     expect(zoomPara(1920, 1080)).toBeGreaterThanOrEqual(4);
     expect(zoomPara(8000, 8000)).toBe(5);
     expect(Number.isInteger(zoomPara(1280, 720))).toBe(true);
+  });
+
+  it('zoom de las villas: más cerca en el celular y con límites', () => {
+    expect(375 / zoomVilla(375, 812)).toBeLessThan(600);
+    expect(1280 / zoomVilla(1280, 760)).toBeGreaterThan(1000);
+    expect(zoomVilla(8000, 8000)).toBe(1.8);
+    expect(zoomVilla(100, 100)).toBe(0.5);
+  });
+
+  it('las texturas siguen al zoom y a la densidad de la pantalla', () => {
+    expect(resolucionTexturas(1, 1)).toBe(1);
+    expect(resolucionTexturas(0.7, 3)).toBe(2.5);
+    expect(resolucionTexturas(1.8, 3)).toBe(4);
+    expect(resolucionTexturas(0.5, 1)).toBe(1);
+  });
+});
+
+describe('dibujo en vectores', () => {
+  it('los 12 personajes viejos se dibujan como personas, sin pixel art', () => {
+    for (const frame of AVATARES) {
+      const svg = crearPersona(APARIENCIA_POR_AVATAR[frame]);
+      expect(svg.startsWith('<svg')).toBe(true);
+      expect(svg).toContain('viewBox="0 0 60 92"');
+      expect(svg).not.toContain('<image');
+    }
+    expect(crearPersona(null, { recorte: 'cabeza' })).toContain('viewBox="8 2 44 44"');
+  });
+
+  it('una apariencia con valores raros no mete texto en el SVG', () => {
+    const svg = crearPersona({ ...APARIENCIA_POR_AVATAR[85], peinado: '"><script>alert(1)</script>' });
+    expect(svg).not.toContain('script');
+  });
+
+  it('casas e interiores de las 4 villas; el nombre del local se escapa', () => {
+    for (const b of LISTA_BARRIOS) {
+      expect(crearCasa({ barrio: b, apariencia: casaPorDefecto(b), color: '#e07a5f' })).toContain('viewBox="0 0 150 172"');
+      expect(crearInterior({ barrio: b, apariencia: null, color: '#3d85c6' })).toContain('viewBox="0 0 480 300"');
+    }
+    const casa = crearCasa({ barrio: 'audiovisual', apariencia: null, color: '#e07a5f', nombre: '<b>Café & Co</b>' });
+    expect(casa).toContain('&lt;b&gt;Café &amp; Co&lt;/b&gt;');
+    expect(casa).not.toContain('<b>');
+  });
+
+  it('en el modo «Quiero trabajar» la casa de un «Se busca» lleva su cartel', () => {
+    const conCartel = crearCasa({ barrio: 'tech', apariencia: null, color: '#e9b44c', cartelSeBusca: true });
+    expect(conCartel).toContain('SE BUSCA');
+    expect(crearCasa({ barrio: 'tech', apariencia: null, color: '#e9b44c' })).not.toContain('SE BUSCA');
   });
 });
