@@ -80,6 +80,10 @@ Abre <http://localhost:5173>.
 - El servidor nunca firma transacciones ni guarda llaves de los usuarios.
 - `.env` y `.seed-keys.json` están en `.gitignore`. Las llaves de ejemplo son **solo para testnet**.
 
+## Licencia
+
+Código abierto bajo la licencia [MIT](LICENSE).
+
 ## Créditos
 
 - Fuente: [Plus Jakarta Sans](https://fonts.google.com/specimen/Plus+Jakarta+Sans) (SIL Open Font License), en toda la interfaz y en los letreros del mapa.
