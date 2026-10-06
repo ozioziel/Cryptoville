@@ -15,7 +15,11 @@ interface Lote {
 
 const DISTANCIA_PUERTA = 14;
 
-/** El pueblo: mapa de Tiled con 3 barrios y 12 lotes. */
+/**
+ * El pueblo: mapa de Tiled con 3 barrios y 12 lotes (gráficos de Kenney).
+ * @deprecated Reemplazado por las villas en vectores (scenes/Villa.ts). Ya no se registra en el juego;
+ * se conserva sin borrar, junto con el mapa (public/assets/mapas/pueblo.json) y los gráficos de Kenney.
+ */
 export class Pueblo extends Phaser.Scene {
   private jugador!: Jugador;
   private teclas!: Record<'arriba' | 'abajo' | 'izq' | 'der' | 'w' | 'a' | 's' | 'd' | 'entrar' | 'entrar2', Phaser.Input.Keyboard.Key>;
@@ -75,7 +79,8 @@ export class Pueblo extends Phaser.Scene {
     }
 
     const inicio = objetos.find((o) => o.type === 'inicio');
-    this.jugador = new Jugador(this, inicio?.x ?? 384, inicio?.y ?? 272, this.avatarInicial);
+    this.jugador = new Jugador(this, inicio?.x ?? 384, inicio?.y ?? 272, 'personajes', 1);
+    this.jugador.setFrame(this.avatarInicial);
     this.physics.add.collider(this.jugador, edificios);
 
     const camara = this.cameras.main;
@@ -100,7 +105,7 @@ export class Pueblo extends Phaser.Scene {
       escuchar('locales', (locales) => this.pintarLocales(locales)),
       escuchar('avatar', (frame) => {
         this.avatarInicial = frame;
-        this.jugador?.cambiarAvatar(frame);
+        this.jugador?.setFrame(frame);
       }),
       escuchar('joystick', (x, y) => this.joystick.set(x, y)),
       escuchar('controles', (activos) => {
