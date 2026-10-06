@@ -1,22 +1,147 @@
 // Tipos de dominio compartidos por la web y la API.
+import type { AparienciaCasa, AparienciaPersona } from '../apariencia.js';
 
 export type Rol = 'usuario' | 'arbitro';
 
-export type Barrio = 'diseno' | 'clases' | 'tecnologia';
+/**
+ * Villas del pueblo. El nombre técnico sigue siendo `barrio` (en la base y en el código)
+ * para no romper nada; en la interfaz se llaman "villas".
+ */
+export type Barrio = 'creativo' | 'tech' | 'audiovisual' | 'academy';
 
-export const BARRIOS: Record<Barrio, { nombre: string; descripcion: string }> = {
-  diseno: { nombre: 'Diseño', descripcion: 'Logos, ilustración, edición de video y redes' },
-  clases: { nombre: 'Clases', descripcion: 'Idiomas, música, matemáticas y tutorías' },
-  tecnologia: { nombre: 'Tecnología', descripcion: 'Programación, webs, soporte y datos' },
+export interface Categoria {
+  id: string;
+  nombre: string;
+}
+
+export interface DatosBarrio {
+  nombre: string;
+  descripcion: string;
+  /** Categorías que puede elegir un local de esta villa (la primera es la inicial). */
+  categorias: readonly Categoria[];
+  /** Color de la villa (chips, portada y franja de las casas). */
+  color: string;
+  colorOscuro: string;
+  /** Fondo suave de los chips de la villa. */
+  colorSuave: string;
+}
+
+/**
+ * Las 4 villas. Las categorías también las valida la base de datos
+ * (CHECK "locales_categoria_check" en apps/api/prisma/migrations): si cambias una, cambia la otra.
+ */
+export const BARRIOS: Record<Barrio, DatosBarrio> = {
+  creativo: {
+    nombre: 'Creativo',
+    descripcion: 'Diseño gráfico, ilustración, animación, UI/UX y branding',
+    categorias: [
+      { id: 'diseno-grafico', nombre: 'Diseño gráfico' },
+      { id: 'ilustracion', nombre: 'Ilustración' },
+      { id: 'animacion', nombre: 'Animación' },
+      { id: 'ui-ux', nombre: 'UI/UX' },
+      { id: 'branding', nombre: 'Branding' },
+    ],
+    color: '#e07a5f',
+    colorOscuro: '#b85a42',
+    colorSuave: '#fbe8e1',
+  },
+  tech: {
+    nombre: 'Tech',
+    descripcion: 'Desarrollo web y móvil, backend, videojuegos y automatización',
+    categorias: [
+      { id: 'desarrollo-web', nombre: 'Desarrollo web' },
+      { id: 'desarrollo-movil', nombre: 'Desarrollo móvil' },
+      { id: 'backend', nombre: 'Backend' },
+      { id: 'videojuegos', nombre: 'Videojuegos' },
+      { id: 'automatizacion', nombre: 'Automatización' },
+    ],
+    color: '#3d85c6',
+    colorOscuro: '#2c639a',
+    colorSuave: '#e3eef8',
+  },
+  audiovisual: {
+    nombre: 'Audiovisual',
+    descripcion: 'Fotografía, edición de video, música, cine y sonido',
+    categorias: [
+      { id: 'fotografia', nombre: 'Fotografía' },
+      { id: 'edicion-video', nombre: 'Edición de video' },
+      { id: 'musica', nombre: 'Música' },
+      { id: 'cine', nombre: 'Cine' },
+      { id: 'sonido', nombre: 'Sonido' },
+    ],
+    color: '#a95656',
+    colorOscuro: '#7e3f43',
+    colorSuave: '#f6e7e4',
+  },
+  academy: {
+    nombre: 'Academy',
+    descripcion: 'Cursos, mentorías, idiomas, programación y diseño',
+    categorias: [
+      { id: 'cursos', nombre: 'Cursos' },
+      { id: 'mentorias', nombre: 'Mentorías' },
+      { id: 'idiomas', nombre: 'Idiomas' },
+      { id: 'programacion', nombre: 'Programación' },
+      { id: 'diseno', nombre: 'Diseño' },
+    ],
+    color: '#5d9b78',
+    colorOscuro: '#3f7a5a',
+    colorSuave: '#e5f1e9',
+  },
 };
 
-/** Lotes del mapa del pueblo por barrio (los define apps/web/public/assets/mapas/pueblo.json). */
+/** Villas en el orden del selector. */
+export const LISTA_BARRIOS = Object.keys(BARRIOS) as Barrio[];
+
+/**
+ * @deprecated Nombres anteriores de los barrios (antes de las villas). La API los sigue
+ * aceptando y los convierte: diseno → creativo, clases → academy, tecnologia → tech.
+ */
+export const BARRIOS_ANTERIORES: Record<string, Barrio> = {
+  diseno: 'creativo',
+  clases: 'academy',
+  tecnologia: 'tech',
+};
+
+export function esBarrio(valor: unknown): valor is Barrio {
+  return typeof valor === 'string' && valor in BARRIOS;
+}
+
+export function esCategoriaDe(barrio: Barrio, categoria: string): boolean {
+  return BARRIOS[barrio].categorias.some((c) => c.id === categoria);
+}
+
+/** Nombre de una categoría para mostrar ("fotografia" → "Fotografía"). */
+export function nombreCategoria(categoria: string): string {
+  for (const b of LISTA_BARRIOS) {
+    const c = BARRIOS[b].categorias.find((x) => x.id === categoria);
+    if (c) return c.nombre;
+  }
+  return categoria;
+}
+
+/**
+ * Número de lote para un local nuevo en una villa: el primer número libre (1, 2, 3…),
+ * reutilizando los huecos que dejan los locales que se van. Las villas no tienen tope.
+ */
+export function primerLoteLibre(ocupados: Iterable<number>): number {
+  const usados = new Set(ocupados);
+  let lote = 1;
+  while (usados.has(lote)) lote += 1;
+  return lote;
+}
+
+/**
+ * @deprecated Las villas ya no tienen tope de lotes: cada villa numera sus lotes desde 1
+ * (ver `primerLoteLibre`). Se conserva solo para no romper código anterior.
+ */
 export const LOTES_POR_BARRIO: Record<Barrio, readonly number[]> = {
-  diseno: [1, 2, 3, 4],
-  clases: [5, 6, 7, 8],
-  tecnologia: [9, 10, 11, 12],
+  creativo: [1, 2, 3, 4],
+  academy: [5, 6, 7, 8],
+  tech: [9, 10, 11, 12],
+  audiovisual: [],
 };
 
+/** @deprecated Un lote ya no indica la villa (cada villa tiene sus propios lotes 1, 2, 3…). */
 export function barrioDeLote(lote: number): Barrio | null {
   for (const [barrio, lotes] of Object.entries(LOTES_POR_BARRIO) as [Barrio, readonly number[]][]) {
     if (lotes.includes(lote)) return barrio;
@@ -24,10 +149,20 @@ export function barrioDeLote(lote: number): Barrio | null {
   return null;
 }
 
-/** Colores permitidos para el letrero del local. */
-export const COLORES_LOCAL = ['#e07a5f', '#3d85c6', '#81b29a', '#f2cc8f', '#9b5de5', '#f15bb5'] as const;
+/** Colores que puede elegir el dueño para el toldo, la puerta y el letrero de su casa (paleta cerrada). */
+export const COLORES_LOCAL = ['#e07a5f', '#3d85c6', '#5d9b78', '#e9b44c', '#9b7bc4', '#81b29a', '#f2cc8f', '#c97b84'] as const;
 
-/** Personajes de Kenney Tiny Dungeon que se pueden usar como avatar (índice del tilesheet). */
+/**
+ * @deprecated Colores de la paleta anterior. La API los sigue aceptando para no invalidar
+ * locales existentes, pero el editor ya no los ofrece.
+ */
+export const COLORES_LOCAL_ANTERIORES = ['#9b5de5', '#f15bb5'] as const;
+
+/**
+ * Personajes de Kenney Tiny Dungeon (índice del tilesheet) que se usaban como avatar.
+ * La columna `avatar` se conserva: si un usuario no tiene `apariencia`, se dibuja la persona
+ * equivalente a su personaje (ver `aparienciaDeAvatar`).
+ */
 export const AVATARES = [84, 85, 86, 87, 88, 96, 97, 98, 99, 100, 111, 112] as const;
 
 export const MAX_SERVICIOS_POR_LOCAL = 6;
@@ -69,6 +204,8 @@ export interface Usuario {
   nombre: string;
   bio: string | null;
   avatar: number;
+  /** Persona en vectores. Si es null, se usa la equivalente a `avatar`. */
+  apariencia: AparienciaPersona | null;
   rol: Rol;
   creado_en: string;
 }
@@ -78,9 +215,14 @@ export interface Local {
   usuario_id: string;
   nombre: string;
   barrio: Barrio;
-  /** Lugar del mapa donde está el local (1..12, ver el mapa de Tiled). */
+  /** Número de lote dentro de su villa (1, 2, 3…). Define dónde está la casa y nunca cambia mientras siga en la villa. */
   lote: number;
+  /** Categoría del local (una de las categorías de su villa). */
+  categoria: string;
+  /** Color del dueño: toldo, puerta y letrero. */
   color: string;
+  /** Casa personalizada. Si es null, se usa la casa por defecto de su villa. */
+  apariencia: AparienciaCasa | null;
   descripcion: string | null;
   activo: boolean;
 }
@@ -176,12 +318,17 @@ export type TipoAviso =
   | 'disputa_abierta'
   | 'disputa_resuelta'
   | 'pedido_cerrado'
-  | 'nuevo_mensaje';
+  | 'nuevo_mensaje'
+  | 'nueva_propuesta'
+  | 'propuesta_aceptada'
+  | 'busqueda_cerrada';
 
 export interface Aviso {
   id: string;
   usuario_id: string;
   pedido_id: string | null;
+  /** «Se busca» al que se refiere el aviso (propuestas). */
+  busqueda_id: string | null;
   tipo: TipoAviso;
   texto: string;
   leido: boolean;

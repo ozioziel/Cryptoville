@@ -4,3 +4,6 @@ export * from './reputation.js';
 export * from './auth.js';
 export * from './stellar/contract.js';
 export * from './stellar/lab-links.js';
+export * from './apariencia.js';
+export * from './datos-curiosos.js';
+export * from './se-busca.js';
