@@ -1,5 +1,7 @@
 // Datos de ejemplo de Cryptoville: 5 usuarios (uno es el árbitro) con local, servicios,
 // pedidos en distintos estados, mensajes, una disputa resuelta y reseñas.
+// Cada usuario tiene su persona y su casa personalizadas, en su villa y con su categoría.
+// También hay «Se busca» abiertos (lo que la gente necesita), algunos con propuestas.
 //
 // - Las wallets salen de .seed-keys.json (npm run seed:keys).
 // - Los pedidos cerrados son "de ejemplo" (es_ejemplo = true): no tienen transacciones reales.
@@ -14,6 +16,12 @@ import path from 'node:path';
 cargarEnv({ path: path.resolve(__dirname, '../../../.env'), quiet: true });
 
 import { PrismaPg } from '@prisma/adapter-pg';
+import {
+  validarAparienciaCasa,
+  validarAparienciaPersona,
+  type AparienciaCasa,
+  type AparienciaPersona,
+} from '@cryptoville/shared';
 import { createClient } from '@supabase/supabase-js';
 import { contrasenaDeWallet, correoDeWallet } from '../src/auth/credenciales';
 import { PrismaClient, type AccionPedido, type Barrio, type EstadoPedido } from '../src/generated/prisma/client';
@@ -41,33 +49,99 @@ const supabase = createClient(requerida('SUPABASE_URL'), requerida('SUPABASE_SER
 const SECRETO = requerida('AUTH_PASSWORD_SECRET');
 const DOMINIO = process.env.AUTH_EMAIL_DOMAIN || 'wallet.cryptoville.test';
 
-const PERFILES: Record<string, { bio: string; avatar: number; local: { nombre: string; barrio: Barrio; lote: number; color: string; descripcion: string } }> = {
+interface Perfil {
+  bio: string;
+  avatar: number;
+  apariencia: AparienciaPersona;
+  local: { nombre: string; barrio: Barrio; lote: number; categoria: string; color: string; descripcion: string; apariencia: AparienciaCasa };
+}
+
+// Lotes numerados dentro de cada villa (1, 2, 3…).
+const PERFILES: Record<string, Perfil> = {
   arbitro: {
     bio: 'Equipo de Cryptoville. Resolvemos disputas y te ayudamos a usar Stellar Lab.',
     avatar: 84,
-    local: { nombre: 'Oficina Cryptoville', barrio: 'tecnologia', lote: 9, color: '#3d85c6', descripcion: 'Ayuda para empezar en el pueblo' },
+    apariencia: {
+      piel: 'piel-3', peinado: 'lateral', colorPelo: 'negro', barba: 'ninguna', arriba: 'camisa', colorArriba: 'marino',
+      abajo: 'pantalon', colorAbajo: 'carbon', zapatos: 'zapatos-negros', lentes: 'redondos', gorro: 'ninguno', colorGorro: 'gris', objeto: 'libro',
+    },
+    local: {
+      nombre: 'Oficina Cryptoville', barrio: 'academy', lote: 2, categoria: 'mentorias', color: '#3d85c6', descripcion: 'Ayuda para empezar en el pueblo',
+      apariencia: {
+        techo: 'buhardilla', colorTecho: 'pizarra', pared: 'piedra', colorPared: 'marfil', puerta: 'doble', ventana: 'dos', toldo: 'rayas',
+        letrero: 'placa', frente: 'plantas', piso: 'alfombra', paredInterior: 'verde', muebles: 'biblioteca', decoracion: 'diplomas',
+      },
+    },
   },
   ana: {
     bio: 'Diseñadora gráfica. Logos, identidad de marca e ilustración.',
     avatar: 99,
-    local: { nombre: 'Estudio Ana', barrio: 'diseno', lote: 1, color: '#e07a5f', descripcion: 'Diseño de marca para emprendedores' },
+    apariencia: {
+      piel: 'piel-2', peinado: 'melena', colorPelo: 'castano-oscuro', barba: 'ninguna', arriba: 'delantal', colorArriba: 'mostaza',
+      abajo: 'pantalon', colorAbajo: 'marino', zapatos: 'zapatillas-blancas', lentes: 'ninguno', gorro: 'boina', colorGorro: 'coral', objeto: 'pincel',
+    },
+    local: {
+      nombre: 'Estudio Ana', barrio: 'creativo', lote: 1, categoria: 'diseno-grafico', color: '#e07a5f', descripcion: 'Diseño de marca para emprendedores',
+      apariencia: {
+        techo: 'tejas', colorTecho: 'coral', pared: 'liso', colorPared: 'vainilla', puerta: 'arco', ventana: 'vitrina', toldo: 'ondas',
+        letrero: 'pintado', frente: 'caballete', piso: 'madera', paredInterior: 'vainilla', muebles: 'atril', decoracion: 'cuadros',
+      },
+    },
   },
   luis: {
     bio: 'Editor de video para redes y YouTube.',
     avatar: 98,
-    local: { nombre: 'Luis Edita', barrio: 'diseno', lote: 2, color: '#9b5de5', descripcion: 'Videos cortos que se ven bien' },
+    apariencia: {
+      piel: 'piel-4', peinado: 'corto', colorPelo: 'negro', barba: 'corta', arriba: 'sudadera', colorArriba: 'carbon',
+      abajo: 'pantalon', colorAbajo: 'marino', zapatos: 'zapatillas-azules', lentes: 'cuadrados', gorro: 'gorra', colorGorro: 'vino', objeto: 'camara',
+    },
+    local: {
+      nombre: 'Luis Edita', barrio: 'audiovisual', lote: 1, categoria: 'edicion-video', color: '#9b7bc4', descripcion: 'Videos cortos que se ven bien',
+      apariencia: {
+        techo: 'equipos', colorTecho: 'grafito', pared: 'liso', colorPared: 'crema', puerta: 'simple', ventana: 'vitrina', toldo: 'rayas',
+        letrero: 'marquesina', frente: 'reflector', piso: 'alfombra', paredInterior: 'grafito', muebles: 'sala-edicion', decoracion: 'afiches',
+      },
+    },
   },
   sofia: {
     bio: 'Profesora de inglés y guitarra, clases por videollamada.',
     avatar: 88,
-    local: { nombre: 'Aula Sofía', barrio: 'clases', lote: 5, color: '#81b29a', descripcion: 'Clases en línea a tu ritmo' },
+    apariencia: {
+      piel: 'piel-2', peinado: 'largo', colorPelo: 'cobrizo', barba: 'ninguna', arriba: 'vestido', colorArriba: 'lavanda',
+      abajo: 'falda', colorAbajo: 'lavanda', zapatos: 'botas-cafe', lentes: 'ninguno', gorro: 'ninguno', colorGorro: 'gris', objeto: 'libro',
+    },
+    local: {
+      nombre: 'Aula Sofía', barrio: 'academy', lote: 1, categoria: 'idiomas', color: '#81b29a', descripcion: 'Clases en línea a tu ritmo',
+      apariencia: {
+        techo: 'tejas', colorTecho: 'teja', pared: 'ladrillo', colorPared: 'ladrillo', puerta: 'arco', ventana: 'arco', toldo: 'liso',
+        letrero: 'clasico', frente: 'pizarra', piso: 'parquet', paredInterior: 'marfil', muebles: 'aula', decoracion: 'mapa',
+      },
+    },
   },
   diego: {
     bio: 'Desarrollador web. Sitios, tiendas y soporte técnico.',
     avatar: 112,
-    local: { nombre: 'Diego Dev', barrio: 'tecnologia', lote: 10, color: '#f2cc8f', descripcion: 'Tu web lista en días' },
+    apariencia: {
+      piel: 'piel-5', peinado: 'rizado', colorPelo: 'negro', barba: 'candado', arriba: 'polera-codigo', colorArriba: 'azul',
+      abajo: 'pantalon', colorAbajo: 'carbon', zapatos: 'zapatillas-blancas', lentes: 'ninguno', gorro: 'ninguno', colorGorro: 'gris', objeto: 'laptop',
+    },
+    local: {
+      nombre: 'Diego Dev', barrio: 'tech', lote: 1, categoria: 'desarrollo-web', color: '#f2cc8f', descripcion: 'Tu web lista en días',
+      apariencia: {
+        techo: 'solar', colorTecho: 'acero', pared: 'vidrio', colorPared: 'nube', puerta: 'vidrio', ventana: 'vitrina', toldo: 'ninguno',
+        letrero: 'neon', frente: 'robot', piso: 'cemento', paredInterior: 'grafito', muebles: 'escritorio', decoracion: 'pantallas',
+      },
+    },
   },
 };
+
+// Si alguien edita los perfiles con una pieza que no existe, el seed se detiene antes de tocar la base.
+for (const [clave, perfil] of Object.entries(PERFILES)) {
+  const persona = validarAparienciaPersona(perfil.apariencia);
+  if (!persona.ok) throw new Error(`Perfil de ejemplo "${clave}": ${persona.error}`);
+  const casa = validarAparienciaCasa(perfil.local.barrio, perfil.local.apariencia);
+  if (!casa.ok) throw new Error(`Casa de ejemplo "${clave}": ${casa.error}`);
+}
 
 const SERVICIOS: Record<string, { titulo: string; descripcion: string; precio_usdc: string; dias_entrega: number }[]> = {
   arbitro: [
@@ -148,6 +222,8 @@ async function main() {
   console.log('Borrando datos anteriores…');
   await prisma.$transaction([
     prisma.aviso.deleteMany(),
+    prisma.propuesta.deleteMany(),
+    prisma.busqueda.deleteMany(),
     prisma.resena.deleteMany(),
     prisma.disputa.deleteMany(),
     prisma.mensaje.deleteMany(),
@@ -167,9 +243,11 @@ async function main() {
     const id = await asegurarCuentaAuth(u.publica);
     ids[u.clave] = id;
     await prisma.usuario.create({
-      data: { id, direccion: u.publica, nombre: u.nombre, rol: u.rol, bio: perfil.bio, avatar: perfil.avatar },
+      data: { id, direccion: u.publica, nombre: u.nombre, rol: u.rol, bio: perfil.bio, avatar: perfil.avatar, apariencia: { ...perfil.apariencia } },
     });
-    const local = await prisma.local.create({ data: { usuario_id: id, ...perfil.local } });
+    const local = await prisma.local.create({
+      data: { usuario_id: id, ...perfil.local, apariencia: { ...perfil.local.apariencia } },
+    });
     servicios[u.clave] = [];
     for (const s of SERVICIOS[u.clave]) {
       const creado = await prisma.servicio.create({ data: { local_id: local.id, ...s } });
@@ -294,8 +372,72 @@ async function main() {
     ],
   });
 
+  console.log('Creando «Se busca» y propuestas…');
+  const enDias = (d: number) => new Date(ahora + d * DIA);
+  const lotesSeBusca: Partial<Record<Barrio, number>> = {};
+  async function seBusca(b: {
+    autor: string;
+    titulo: string;
+    descripcion: string;
+    barrio: Barrio;
+    categoria: string;
+    presupuesto: string;
+    dias: number;
+    propuestas?: { proveedor: string; monto: string; dias: number; mensaje: string }[];
+  }) {
+    const fila = await prisma.busqueda.create({
+      data: {
+        autor_id: ids[b.autor],
+        titulo: b.titulo,
+        descripcion: b.descripcion,
+        barrio: b.barrio,
+        categoria: b.categoria,
+        // Casas del modo «Quiero trabajar»: lotes seguidos dentro de cada villa.
+        lote: (lotesSeBusca[b.barrio] = (lotesSeBusca[b.barrio] ?? 0) + 1),
+        presupuesto_usdc: b.presupuesto,
+        fecha_limite: enDias(b.dias),
+        total_propuestas: b.propuestas?.length ?? 0,
+        creado_en: new Date(ahora - 2 * 3_600_000),
+      },
+    });
+    for (const p of b.propuestas ?? []) {
+      await prisma.propuesta.create({
+        data: { busqueda_id: fila.id, proveedor_id: ids[p.proveedor], monto_usdc: p.monto, dias_entrega: p.dias, mensaje: p.mensaje },
+      });
+      await prisma.aviso.create({
+        data: {
+          usuario_id: ids[b.autor],
+          busqueda_id: fila.id,
+          tipo: 'nueva_propuesta',
+          texto: `Te llegó una propuesta para «${b.titulo}» por ${p.monto} USDC.`,
+        },
+      });
+    }
+  }
+  await seBusca({
+    autor: 'diego', titulo: 'Logo para mi tienda de computadoras', barrio: 'creativo', categoria: 'diseno-grafico', presupuesto: '35', dias: 10,
+    descripcion: 'Busco un logo moderno y sencillo para una tienda en línea de computadoras y accesorios.',
+    propuestas: [{ proveedor: 'ana', monto: '35', dias: 5, mensaje: 'Te propongo tres bocetos, dos rondas de cambios y los archivos en PNG y SVG.' }],
+  });
+  await seBusca({
+    autor: 'sofia', titulo: 'Video corto para promocionar mis clases', barrio: 'audiovisual', categoria: 'edicion-video', presupuesto: '30', dias: 14,
+    descripcion: 'Necesito un video de 30 segundos para redes que muestre cómo son mis clases de inglés en línea.',
+    propuestas: [{ proveedor: 'luis', monto: '28', dias: 6, mensaje: 'Lo edito con subtítulos y música libre; te paso una primera versión en 3 días.' }],
+  });
+  await seBusca({
+    autor: 'luis', titulo: 'Página para mi portafolio de videos', barrio: 'tech', categoria: 'desarrollo-web', presupuesto: '70', dias: 20,
+    descripcion: 'Quiero una página de una sección para mostrar mis trabajos de edición, con formulario de contacto.',
+  });
+  await seBusca({
+    autor: 'ana', titulo: 'Clases de inglés para presentar a clientes', barrio: 'academy', categoria: 'idiomas', presupuesto: '20', dias: 12,
+    descripcion: 'Busco dos clases de conversación en inglés para practicar presentaciones de proyectos de diseño.',
+  });
+
   console.log('✔ Datos de ejemplo cargados:');
-  for (const u of llaves.usuarios) console.log(`  ${u.nombre.padEnd(20)} ${u.rol === 'arbitro' ? '(árbitro) ' : ''}${u.publica}`);
+  for (const u of llaves.usuarios) {
+    const l = PERFILES[u.clave].local;
+    console.log(`  ${u.nombre.padEnd(20)} ${u.rol === 'arbitro' ? '(árbitro) ' : ''}${u.publica}  · Villa ${l.barrio}, lote ${l.lote}`);
+  }
 }
 
 main()
