@@ -4,7 +4,7 @@ import { useSesion } from '../../features/auth/sesion';
 import { api, mensajeDeError } from '../../lib/api';
 import { obtenerConfig } from '../../lib/config';
 import { useEstado } from '../estado';
-import { Aviso, Avatar } from '../components/basicos';
+import { Aviso, Avatar, Garantia } from '../components/basicos';
 
 /** Detalle de un servicio y formulario para pedirlo. */
 export function PanelServicio({ servicioId }: { servicioId: string }) {
@@ -40,17 +40,18 @@ export function PanelServicio({ servicioId }: { servicioId: string }) {
       {servicio.foto_url && <img src={servicio.foto_url} alt={servicio.titulo} className="foto-grande" />}
       <h3>{servicio.titulo}</h3>
       <div className="fila">
-        <Avatar frame={local.usuario.avatar} tamano={24} />
+        <Avatar frame={local.usuario.avatar} apariencia={local.usuario.apariencia} tamano={28} />
         <span>
           {local.usuario.nombre} · {local.nombre}
         </span>
       </div>
-      <p className="precio">{servicio.precio_usdc} USDC</p>
+      <p className="precio precio-grande">{servicio.precio_usdc} USDC</p>
       <p>{servicio.descripcion}</p>
       <p className="tenue pequeno">
         Entrega en {servicio.dias_entrega} días. El proveedor recibe {servicio.precio_usdc} USDC menos la comisión de Cryptoville (
         {config.comision_bps / 100}% ≈ {comision} USDC) cuando liberes el pago.
       </p>
+      <Garantia />
       {esMio ? (
         <Aviso>Este servicio es tuyo.</Aviso>
       ) : usuario ? (

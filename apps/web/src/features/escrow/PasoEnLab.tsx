@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api, mensajeDeError } from '../../lib/api';
 import { obtenerConfig } from '../../lib/config';
 import { Aviso, Copiar } from '../../ui/components/basicos';
+import { Icono } from '../../ui/components/Iconos';
 import type { PedidoDetalle } from '../orders/datos';
 import { argumentosPara } from './pasos';
 
@@ -75,7 +76,7 @@ export function PasoEnLab({
         <ol className="lista-pasos">
           <li>
             <a className="boton boton-primario" href={config.contrato_url} target="_blank" rel="noreferrer">
-              Abrir el contrato en Stellar Lab ↗
+              Abrir el contrato en Stellar Lab <Icono nombre="enlace" tamano={16} />
             </a>
             <span className="tenue pequeno"> Pestaña «Invoke contract», conecta tu wallet.</span>
           </li>

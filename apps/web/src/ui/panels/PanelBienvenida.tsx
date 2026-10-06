@@ -3,7 +3,8 @@ import { useSesion } from '../../features/auth/sesion';
 import { CanceladoPorUsuario } from '../../features/auth/wallet';
 import { mensajeDeError } from '../../lib/api';
 import { obtenerConfig } from '../../lib/config';
-import { Aviso } from '../components/basicos';
+import { Aviso, Garantia } from '../components/basicos';
+import { LogoIcono } from '../components/Iconos';
 
 /** Qué es Cryptoville y cómo entrar con la wallet. */
 export function PanelBienvenida({ onListo }: { onListo: () => void }) {
@@ -28,14 +29,18 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
 
   return (
     <div className="pila">
-      <p className="destacado">
-        Un pueblo donde las personas ofrecen sus servicios, los encuentran y se pagan <strong>en garantía</strong> con Stellar.
-      </p>
+      <div className="bienvenida-cabecera">
+        <LogoIcono tamano={44} />
+        <p className="destacado">
+          Un pueblo donde las personas ofrecen sus servicios, los encuentran y se pagan <strong>en garantía</strong> con Stellar.
+        </p>
+      </div>
       <ol className="lista-pasos">
-        <li>Camina por los barrios (flechas o WASD; en el celular, el joystick) y entra a los locales con <kbd>E</kbd>.</li>
+        <li>Camina por las villas (flechas o WASD; en el celular, el joystick) y entra a los locales con <kbd>E</kbd>.</li>
         <li>Pide un servicio. Cuando el proveedor acepta, pagas en garantía desde Stellar Lab.</li>
         <li>El contrato guarda el dinero hasta que confirmas la entrega. Si hay un problema, decide el árbitro.</li>
       </ol>
+      <Garantia />
       {config.red === 'testnet' && (
         <Aviso tipo="aviso">Estás en <strong>testnet</strong>: el dinero es de prueba (USDC de prueba), no tiene valor real.</Aviso>
       )}
