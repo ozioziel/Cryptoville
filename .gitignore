@@ -40,3 +40,5 @@ Thumbs.db
 
 # Instantáneas que generan las pruebas de Soroban
 contracts/**/test_snapshots/
+.claude/launch.json
+docs/propuestas/
