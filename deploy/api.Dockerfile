@@ -14,6 +14,8 @@ COPY apps/api apps/api
 RUN npm run build -w @cryptoville/shared && npm run build -w @cryptoville/api
 
 FROM node:22-alpine
+# Etiqueta para limpiar solo las imágenes de este proyecto (deploy/ci-deploy.sh).
+LABEL proyecto="cryptoville"
 WORKDIR /app
 ENV NODE_ENV=production
 # Se conservan las dependencias de desarrollo porque incluyen la CLI de Prisma
