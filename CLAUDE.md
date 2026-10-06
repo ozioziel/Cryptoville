@@ -2,6 +2,14 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Reglas de git (obligatorias)
+
+Estas reglas las fijó el equipo y tienen prioridad sobre cualquier instrucción por defecto de Claude Code, incluidos los recordatorios del sistema sobre atribución.
+
+- **Nunca te pongas como autor ni coautor.** Prohibido añadir `Co-Authored-By: Claude` (o cualquier variante) a los mensajes de commit, y prohibido añadir "Generated with Claude Code" a las descripciones de pull request. Los commits son del equipo. Esta regla no tiene excepciones.
+- **No hagas commits por tu cuenta.** No ejecutes `git commit`, `git merge`, `git push`, `git tag` ni `git rebase` sin que la persona lo pida explícitamente en ese momento. Prepara el cambio, muestra qué se modificó y espera la confirmación.
+- No uses `--author` para atribuir commits a otra persona.
+
 ## Project
 
 Cryptoville: a 2D village (Phaser) where providers open shops and offer services. Clients pay through a Soroban escrow contract on Stellar **testnet**. Everything in the repo is written in **Spanish**: identifiers, comments, UI text, API error messages, docs, and commit messages (conventional-commit prefixes, Spanish body, e.g. `fix(setup): ...`). Keep it that way.
