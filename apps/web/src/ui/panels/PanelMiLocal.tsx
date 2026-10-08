@@ -33,10 +33,15 @@ const COLORES_DUENO: readonly OpcionPieza[] = COLORES_LOCAL.map((color, i) => ({
   color,
 }));
 
-/** Abrir o editar el local propio, su casa (por fuera y por dentro) y sus servicios. */
-export function PanelMiLocal() {
-  const { usuario, local, recargar } = useSesion();
-  const { locales, recargarPueblo, notificar, villa } = useEstado();
+/**
+ * Abrir o editar uno de mis locales, su casa (por fuera y por dentro) y sus servicios.
+ * - Sin `localId`: el local principal (o abrir el primero).
+ * - `localId="nuevo"`: abrir otro local (hasta 3 gratis; el cuarto, después de pagarlo en «Mis locales»).
+ */
+export function PanelMiLocal({ localId }: { localId?: string }) {
+  const { usuario, local: principal, locales: mios, recargar } = useSesion();
+  const { locales, recargarPueblo, notificar, villa, cambiar } = useEstado();
+  const local = localId === 'nuevo' ? null : localId ? (mios.find((l) => l.id === localId) ?? null) : principal;
   const [nombre, setNombre] = useState(local?.nombre ?? '');
   const [barrio, setBarrio] = useState<Barrio>(local?.barrio ?? villa);
   const [categoria, setCategoria] = useState<string>(local?.categoria ?? BARRIOS[local?.barrio ?? villa].categorias[0].id);
@@ -51,9 +56,10 @@ export function PanelMiLocal() {
   const vistaExterior = useMemo(() => crearCasa({ barrio, apariencia: casa, color, nombre: nombre.trim() || 'Tu local' }), [barrio, casa, color, nombre]);
   const vistaInterior = useMemo(() => crearInterior({ barrio, apariencia: casa, color }), [barrio, casa, color]);
 
-  if (!usuario) return <p className="tenue">Entra con tu wallet para abrir tu local.</p>;
+  if (!usuario) return <p className="tenue">Entra para abrir tu local.</p>;
+  if (localId && localId !== 'nuevo' && !local) return <p className="tenue">Ese local no es tuyo o ya no existe.</p>;
 
-  const servicios = locales.find((l) => l.usuario_id === usuario.id)?.servicios ?? [];
+  const servicios = local ? (locales.find((l) => l.id === local.id)?.servicios ?? []) : [];
 
   const cambiarVilla = (b: Barrio) => {
     setBarrio(b);
@@ -66,14 +72,16 @@ export function PanelMiLocal() {
     setError(null);
     setGuardando(true);
     try {
-      const nuevo = await api<{ lote: number; barrio: Barrio }>('/mi-local', {
-        metodo: 'PUT',
-        cuerpo: { nombre, barrio, categoria, color, descripcion, apariencia: casa },
-      });
+      const cuerpo = { nombre, barrio, categoria, color, descripcion, apariencia: casa };
+      const nuevo = local
+        ? await api<{ id: string; lote: number; barrio: Barrio }>(`/locales/${local.id}`, { metodo: 'PUT', cuerpo })
+        : await api<{ id: string; lote: number; barrio: Barrio }>(mios.length ? '/locales' : '/mi-local', { metodo: mios.length ? 'POST' : 'PUT', cuerpo });
       await recargar();
       await recargarPueblo();
       emitir('ir-a-local', { barrio: nuevo.barrio, lote: nuevo.lote });
       notificar(local ? 'Local actualizado' : `¡Abriste tu local en la Villa ${BARRIOS[nuevo.barrio].nombre}!`);
+      // Después de abrir uno nuevo, el panel sigue con ese local (para sumarle servicios).
+      if (!local) cambiar({ tipo: 'mi-local', localId: nuevo.id });
     } catch (e) {
       setError(mensajeDeError(e));
     } finally {
@@ -151,6 +159,11 @@ export function PanelMiLocal() {
         {guardando ? 'Guardando…' : local ? 'Guardar cambios' : 'Abrir mi local'}
       </button>
       {error && <Aviso tipo="peligro">{error}</Aviso>}
+      {!local && mios.length > 0 && (
+        <p className="tenue pequeno">
+          Es tu local número {mios.length + 1}. Los primeros 3 son gratis; los que siguen se pagan una sola vez desde «Mis locales».
+        </p>
+      )}
 
       {local && (
         <>
@@ -173,6 +186,7 @@ export function PanelMiLocal() {
           </ul>
           {editando ? (
             <FormularioServicio
+              localId={local.id}
               servicio={editando === 'nuevo' ? null : editando}
               onListo={async (texto) => {
                 setEditando(null);
@@ -195,10 +209,12 @@ export function PanelMiLocal() {
 }
 
 function FormularioServicio({
+  localId,
   servicio,
   onListo,
   onCancelar,
 }: {
+  localId: string;
   servicio: Servicio | null;
   onListo: (texto: string) => void;
   onCancelar: () => void;
@@ -235,7 +251,7 @@ function FormularioServicio({
     const cuerpo = { titulo, descripcion, precio_usdc: precio, dias_entrega: Number(dias), foto_url: foto };
     try {
       if (servicio) await api(`/servicios/${servicio.id}`, { metodo: 'PATCH', cuerpo });
-      else await api('/servicios', { cuerpo });
+      else await api('/servicios', { cuerpo: { ...cuerpo, local_id: localId } });
       onListo(servicio ? 'Servicio actualizado' : 'Servicio publicado');
     } catch (e) {
       setError(mensajeDeError(e));

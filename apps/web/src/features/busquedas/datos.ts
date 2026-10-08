@@ -5,7 +5,7 @@ import type { SeBuscaEnMapa } from '../../game/EventBus';
 import { supabase } from '../../lib/supabase';
 import type { UsuarioPublico } from '../services/datos';
 
-const CAMPOS_USUARIO = 'id, nombre, avatar, apariencia, direccion, bio, rol';
+const CAMPOS_USUARIO = 'id, nombre, avatar, apariencia, direccion, bio, rol, verificado';
 
 export interface BusquedaPublica extends Busqueda {
   autor: UsuarioPublico;
@@ -20,7 +20,9 @@ export interface LocalDeProveedor {
 }
 
 export interface PropuestaDetalle extends Propuesta {
-  proveedor: UsuarioPublico & { local: LocalDeProveedor | null };
+  proveedor: UsuarioPublico;
+  /** Local desde el que se propone (v2: la persona puede tener varios). */
+  local: LocalDeProveedor | null;
 }
 
 export interface BusquedaDetalle extends BusquedaPublica {
@@ -60,17 +62,17 @@ export async function cargarBusqueda(id: string): Promise<BusquedaDetalle | null
     .from('busquedas')
     .select(
       `*, autor:usuarios!busquedas_autor_id_fkey(${CAMPOS_USUARIO}), ` +
-        `propuestas(*, proveedor:usuarios!propuestas_proveedor_id_fkey(${CAMPOS_USUARIO}, local:locales(id, nombre, barrio, lote, activo)))`,
+        `propuestas(*, local:locales!propuestas_local_id_fkey(id, nombre, barrio, lote, activo), proveedor:usuarios!propuestas_proveedor_id_fkey(${CAMPOS_USUARIO}))`,
     )
     .eq('id', id)
     .maybeSingle();
   if (error) throw new Error('No se pudo cargar el «Se busca»');
   if (!data) return null;
-  const b = data as unknown as BusquedaDetalle & { propuestas: (PropuestaDetalle & { proveedor: { local: unknown } })[] };
+  const b = data as unknown as BusquedaDetalle & { propuestas: (Omit<PropuestaDetalle, 'local'> & { local: LocalDeProveedor | LocalDeProveedor[] | null })[] };
   return {
     ...conMontos(b),
     propuestas: (b.propuestas ?? [])
-      .map((p) => propuestaConMonto({ ...p, proveedor: { ...p.proveedor, local: uno(p.proveedor.local as LocalDeProveedor | LocalDeProveedor[]) } }))
+      .map((p) => propuestaConMonto({ ...p, local: uno(p.local) }))
       .sort((x, y) => x.creado_en.localeCompare(y.creado_en)),
   };
 }

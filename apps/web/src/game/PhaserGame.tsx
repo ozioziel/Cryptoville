@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { Arranque } from './scenes/Arranque';
 import { Interior } from './scenes/Interior';
 import { Villa } from './scenes/Villa';
+import { obtenerConfig } from '../lib/config';
 import { modoGuardado, villaGuardada } from './villaInicial';
 
 /** Densidad de la pantalla (con tope, para no crear lienzos gigantes). */
@@ -55,6 +56,9 @@ export function PhaserGame() {
             g.registry.set('dpr', d);
             g.registry.set('villa-inicial', villaGuardada());
             g.registry.set('modo', modoGuardado());
+            // En testnet la franja «Modo de prueba» (22 px) corre la barra superior: el interior lo tiene en cuenta.
+            g.registry.set('margenSuperior', obtenerConfig().red === 'testnet' ? 22 : 0);
+            g.registry.set('red', obtenerConfig().red);
           },
         },
       });

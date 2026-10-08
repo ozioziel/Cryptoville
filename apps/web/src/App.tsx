@@ -1,14 +1,26 @@
-import { BARRIOS, LISTA_BARRIOS, aparienciaDeUsuario, type AparienciaPersona, type Barrio } from '@cryptoville/shared';
+import {
+  BARRIOS,
+  LISTA_BARRIOS,
+  aparienciaDeUsuario,
+  datosDocumento,
+  nombreSector,
+  type AparienciaPersona,
+  type Barrio,
+  type DatosDocumento,
+} from '@cryptoville/shared';
 import { useEffect, useRef, useState } from 'react';
 import { COLOR_SE_BUSCA } from './arte/casa';
 import { edificioCentral } from './arte/villa';
 import { seBuscaEnMapa, type BusquedaPublica } from './features/busquedas/datos';
 import { ProveedorSesion, useSesion } from './features/auth/sesion';
 import { localEnMapa, type LocalDelPueblo } from './features/services/datos';
+import { cargarDestacados } from './features/portafolio/datos';
+import { PersonasEnLinea } from './features/cercania/PersonasEnLinea';
+import { ChatCercania } from './ui/chat/ChatCercania';
 import { emitir, escuchar, type ModoVilla, type Puerta } from './game/EventBus';
 import { PhaserGame } from './game/PhaserGame';
-import { cargarConfig, type ConfigPublica } from './lib/config';
-import { mensajeDeError } from './lib/api';
+import { cargarConfig, obtenerConfig, type ConfigPublica } from './lib/config';
+import { api, mensajeDeError } from './lib/api';
 import { Avatar } from './ui/components/basicos';
 import { Icono, LogoIcono } from './ui/components/Iconos';
 import { Joystick } from './ui/components/Joystick';
@@ -20,13 +32,20 @@ import { PanelAvisos } from './ui/panels/PanelAvisos';
 import { PanelBienvenida } from './ui/panels/PanelBienvenida';
 import { PanelBuscar } from './ui/panels/PanelBuscar';
 import { PanelBusqueda } from './ui/panels/PanelBusqueda';
+import { PanelComentarios, PanelComentariosEquipo } from './ui/panels/PanelComentarios';
+import { PanelAceptarLegal, PanelLegal } from './ui/panels/PanelLegal';
+import { PanelWallets } from './ui/panels/PanelWallets';
+import { PanelAvisosFuera, PanelReportar } from './ui/panels/PanelConfianza';
 import { PanelDatosCuriosos } from './ui/panels/PanelDatosCuriosos';
 import { PanelLote } from './ui/panels/PanelLote';
 import { PanelMiLocal } from './ui/panels/PanelMiLocal';
+import { PanelMisLocales } from './ui/panels/PanelMisLocales';
+import { PanelMiPortafolio, PanelPortafolio, PanelProyecto } from './ui/panels/PanelPortafolio';
 import { PanelPedido } from './ui/panels/PanelPedido';
 import { PanelPedidos } from './ui/panels/PanelPedidos';
-import { PanelPerfil } from './ui/panels/PanelPerfil';
+import { PanelPerfil, PanelPersonaje, PanelPersonalizar } from './ui/panels/PanelPerfil';
 import { PanelPublicarBusqueda } from './ui/panels/PanelPublicarBusqueda';
+import { PanelRetiro } from './ui/panels/PanelRetiro';
 import { PanelServicio } from './ui/panels/PanelServicio';
 
 const esTactil = () => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
@@ -83,12 +102,95 @@ export function App() {
 }
 
 function Pueblo() {
-  const { usuario } = useSesion();
-  const { panel, abrir, cerrar, atras, puedeVolver, locales, notificaciones, descartar, avisosSinLeer, villa, irAVilla, modo, cambiarModo, seBusca } =
-    useEstado();
+  const { usuario, recargar } = useSesion();
+  const {
+    panel,
+    abrir,
+    cerrar,
+    atras,
+    puedeVolver,
+    locales,
+    notificaciones,
+    descartar,
+    avisosSinLeer,
+    villa,
+    irAVilla,
+    sector,
+    irASector,
+    modo,
+    cambiarModo,
+    seBusca,
+    avisar,
+    chatCon,
+    abrirChat,
+  } = useEstado();
+  // Chat por cercanía: quién está cerca para hablar («Hablar con… [H]»).
+  const [personaCerca, setPersonaCerca] = useState<{ id: string; nombre: string } | null>(null);
+  // Sector de la villa actual («Creativo», «Creativo B»…): solo si el dato es de esta villa.
+  const sectorVilla = sector.barrio === villa ? sector : { barrio: villa, sector: 1, total: 1 };
+  const nombreVilla = nombreSector(BARRIOS[villa].nombre, sectorVilla.sector);
   const [puertaCercana, setPuertaCercana] = useState<Puerta | null>(null);
   const interiorAbierto = useRef(false);
   const [tactil] = useState(esTactil);
+  const [pendientesLegales, setPendientesLegales] = useState<DatosDocumento[]>([]);
+  const enTestnet = obtenerConfig().red === 'testnet';
+
+  // Enlaces que llegan por correo o notificación: ?pedido=…, ?se-busca=…, ?kyc=volver, ?correo=… (una sola vez).
+  useEffect(() => {
+    const p = new URLSearchParams(location.search);
+    if (![...p.keys()].length) return;
+    const pedido = p.get('pedido');
+    const seBusca = p.get('se-busca');
+    const correo = p.get('correo');
+    history.replaceState(null, '', location.pathname);
+    if (pedido && /^[0-9a-f-]{36}$/i.test(pedido)) abrir({ tipo: 'pedido', id: pedido });
+    else if (seBusca && /^[0-9a-f-]{36}$/i.test(seBusca)) abrir({ tipo: 'busqueda', id: seBusca });
+    if (correo && /^[0-9a-f]{48}$/.test(correo)) {
+      api('/notificaciones/correo/verificar', { cuerpo: { token: correo } }).then(
+        () => avisar('Confirmaste tu correo: te llegarán los avisos.', 'exito'),
+        (e) => avisar(mensajeDeError(e), 'error'),
+      );
+    }
+    if (p.get('kyc') === 'volver') {
+      const id = avisar('Revisando tu verificación…', 'cargando');
+      // Puede que el aviso de Didit todavía no llegara: se le pregunta directamente.
+      setTimeout(() => {
+        api<{ estado: string | null }>('/kyc/actualizar', { cuerpo: {} }).then(
+          async (r) => {
+            await recargar();
+            const texto =
+              r.estado === 'aprobada'
+                ? '¡Listo! Verificaste tu identidad.'
+                : r.estado === 'en_revision'
+                  ? 'Tu verificación está en revisión: te avisamos cuando termine.'
+                  : 'Tu verificación todavía no terminó.';
+            avisar(texto, r.estado === 'aprobada' ? 'exito' : 'info', id);
+          },
+          (e) => avisar(mensajeDeError(e), 'error', id),
+        );
+      }, 1500);
+    }
+  }, [abrir, avisar, recargar]);
+
+  // Al entrar: si hay documentos legales nuevos o que cambiaron, se piden antes de seguir.
+  useEffect(() => {
+    if (!usuario) {
+      setPendientesLegales([]);
+      return;
+    }
+    let activo = true;
+    api<DatosDocumento[]>('/legal/pendientes').then(
+      (p) => {
+        if (!activo) return;
+        setPendientesLegales(p);
+        if (p.length) abrir({ tipo: 'aceptar-legal' });
+      },
+      () => undefined,
+    );
+    return () => {
+      activo = false;
+    };
+  }, [usuario, abrir]);
 
   // Primera visita: bienvenida.
   useEffect(() => {
@@ -152,10 +254,18 @@ function Pueblo() {
             color: local.color,
             aparienciaCasa: local.apariencia,
           });
+          // Los cuadros de la pared (proyectos destacados del dueño) llegan después, cuando se cargan.
+          void cargarDestacados(local.usuario_id).then(
+            (ps) => interiorAbierto.current && emitir('cuadros-interior', ps.map((x) => ({ id: x.id, titulo: x.titulo, foto: x.fotos[0] ?? null }))),
+            () => undefined,
+          );
         }
         abrir({ tipo: 'lote', lote: p.lote, barrio: p.barrio });
       }),
       escuchar('salio-del-local', () => cerrar()),
+      escuchar('abrir-proyecto', (id) => abrir({ tipo: 'proyecto', id })),
+      escuchar('cerca-de-persona', setPersonaCerca),
+      escuchar('hablar-con', (id) => abrirChat(id)),
       escuchar('pueblo-listo', () => {
         emitir('locales', localesRef.current.map(localEnMapa));
         emitir('se-busca', seBuscaRef.current.map(seBuscaEnMapa));
@@ -166,7 +276,7 @@ function Pueblo() {
       }),
     ];
     return () => quitar.forEach((f) => f());
-  }, [abrir, cerrar]);
+  }, [abrir, cerrar, abrirChat]);
 
   useEffect(() => {
     if (usuario) emitir('apariencia', aparienciaDeUsuario(usuario));
@@ -200,8 +310,13 @@ function Pueblo() {
   };
 
   return (
-    <div className="app">
+    <div className={`app ${enTestnet ? 'con-franja' : ''}`}>
       <PhaserGame />
+      {enTestnet && (
+        <div className="franja-red" role="status">
+          Modo de prueba: el dinero no es real
+        </div>
+      )}
       <header className="barra">
         <div className="barra-lado">
           <button type="button" className="pastilla logo" onClick={() => abrir({ tipo: 'bienvenida' })} aria-label="Cryptoville: ¿cómo funciona?">
@@ -212,7 +327,7 @@ function Pueblo() {
             <span className="punto" style={{ background: BARRIOS[villa].color }} />
             <span>
               <span className="solo-ancho-medio">Villa </span>
-              {BARRIOS[villa].nombre}
+              {nombreVilla}
             </span>
             <span className="tenue solo-ancho">
               · {enVilla} {queHay}
@@ -298,32 +413,70 @@ function Pueblo() {
             </button>
           );
         })}
+        {/* Sectores de la villa actual («Creativo», «B», «C»…): aparecen cuando se llenan las primeras 60 casas. */}
+        {sectorVilla.total > 1 && (
+          <span className="sectores" role="group" aria-label={`Sectores de la Villa ${BARRIOS[villa].nombre}`}>
+            {Array.from({ length: sectorVilla.total }, (_, i) => i + 1).map((s) => {
+              const activo = s === sectorVilla.sector;
+              const nombre = nombreSector(BARRIOS[villa].nombre, s);
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  className={`sector ${activo ? 'activo' : ''}`}
+                  aria-current={activo ? 'true' : undefined}
+                  aria-label={nombre}
+                  title={nombre}
+                  onClick={() => !activo && irASector(s)}
+                >
+                  {s === 1 ? 'A' : nombre.slice(BARRIOS[villa].nombre.length + 1)}
+                </button>
+              );
+            })}
+          </span>
+        )}
       </nav>
 
-      {!panel && textoEntrar && (
-        <button type="button" className="boton boton-primario boton-entrar" onClick={() => emitir('pedir-entrar')}>
-          {textoEntrar}
-          {!tactil && <kbd>E</kbd>}
-        </button>
+      {/* Si estás cerca de una puerta y de una persona, los dos botones salen apilados (en el celular, sin la tecla). */}
+      {!panel && (textoEntrar || (personaCerca && usuario && chatCon !== personaCerca.id)) && (
+        <div className="acciones-cerca">
+          {personaCerca && usuario && chatCon !== personaCerca.id && (
+            <button type="button" className="boton boton-entrar boton-hablar" onClick={() => abrirChat(personaCerca.id)}>
+              <Icono nombre="globo" /> Hablar con {personaCerca.nombre}
+              {!tactil && <kbd>H</kbd>}
+            </button>
+          )}
+          {textoEntrar && (
+            <button type="button" className="boton boton-primario boton-entrar" onClick={() => emitir('pedir-entrar')}>
+              {textoEntrar}
+              {!tactil && <kbd>E</kbd>}
+            </button>
+          )}
+        </div>
       )}
-      {!panel && !tactil && !textoEntrar && <p className="ayuda-controles">Camina con las flechas o WASD · entra con E</p>}
+      {!panel && !tactil && !textoEntrar && !personaCerca && <p className="ayuda-controles">Camina con las flechas o WASD · entra con E · habla con H</p>}
+      <PersonasEnLinea />
+      <ChatCercania />
       {tactil && !panel && <Joystick />}
 
       {panel && (
         <Panel
           titulo={tituloPanel(panel, locales, villa)}
           portada={portadaPanel(panel, locales, villa)}
-          amplio={['pedido', 'perfil', 'mi-local', 'arbitro', 'busqueda'].includes(panel.tipo)}
+          amplio={['pedido', 'perfil', 'mi-local', 'mis-locales', 'personaje', 'portafolio', 'proyecto', 'mi-portafolio', 'arbitro', 'busqueda', 'legal', 'comentarios-equipo'].includes(panel.tipo)}
           onCerrar={panel.tipo === 'bienvenida' ? cerrarBienvenida : cerrar}
           onAtras={puedeVolver ? atras : undefined}
         >
-          {contenidoPanel(panel, cerrarBienvenida, villa)}
+          {contenidoPanel(panel, cerrarBienvenida, villa, pendientesLegales, () => {
+            setPendientesLegales([]);
+            cerrar();
+          })}
         </Panel>
       )}
 
       <div className="notificaciones" aria-live="polite">
         {notificaciones.map((n) => (
-          <div key={n.id} className="notificacion">
+          <div key={n.id} className={`notificacion notificacion-${n.tipo}`} role={n.tipo === 'error' ? 'alert' : undefined}>
             <button
               type="button"
               className="notificacion-texto"
@@ -331,6 +484,7 @@ function Pueblo() {
                 descartar(n.id);
                 if (n.pedidoId) abrir({ tipo: 'pedido', id: n.pedidoId });
                 else if (n.busquedaId) abrir({ tipo: 'busqueda', id: n.busquedaId });
+                else if (n.personaId) abrirChat(n.personaId);
               }}
             >
               {n.texto}
@@ -347,6 +501,7 @@ function Pueblo() {
 
 function textoPuerta(p: Puerta | null, modo: ModoVilla, locales: LocalDelPueblo[], seBusca: BusquedaPublica[]): string | null {
   if (!p) return null;
+  if (p.tipo === 'sector') return `Ir a Villa ${nombreSector(BARRIOS[p.barrio].nombre, p.sector ?? 1)}`;
   if (p.tipo === 'lote-libre') return modo === 'trabajar' ? 'Publicar lo que necesitas' : 'Ver lote disponible';
   if (p.tipo === 'edificio') return `Entrar a ${edificioCentral(p.barrio).nombre}`;
   if (p.tipo === 'se-busca') {
@@ -384,8 +539,23 @@ function tituloPanel(p: PanelAbierto, locales: LocalDelPueblo[], villa: Barrio):
       return 'Pedido';
     case 'perfil':
       return 'Mi perfil';
-    case 'mi-local':
-      return 'Mi local';
+    case 'mi-local': {
+      if (p.localId === 'nuevo') return 'Abrir otro local';
+      const propio = p.localId ? locales.find((l) => l.id === p.localId) : undefined;
+      return propio?.nombre ?? 'Mi local';
+    }
+    case 'mis-locales':
+      return 'Mis locales';
+    case 'personalizar':
+      return 'Personalizar';
+    case 'personaje':
+      return 'Mi personaje';
+    case 'portafolio':
+      return 'Portafolio';
+    case 'proyecto':
+      return 'Proyecto';
+    case 'mi-portafolio':
+      return 'Mi portafolio';
     case 'buscar':
       return p.pestana === 'se-busca' ? 'Quiero trabajar' : 'Quiero contratar';
     case 'arbitro':
@@ -398,10 +568,32 @@ function tituloPanel(p: PanelAbierto, locales: LocalDelPueblo[], villa: Barrio):
       return 'Se busca';
     case 'publicar-busqueda':
       return 'Publicar un «Se busca»';
+    case 'legal':
+      return datosDocumento(p.documento)?.titulo ?? 'Documento';
+    case 'aceptar-legal':
+      return 'Documentos para aceptar';
+    case 'comentarios':
+      return 'Enviar comentarios';
+    case 'comentarios-equipo':
+      return 'Comentarios recibidos';
+    case 'wallets':
+      return 'Mis wallets';
+    case 'retiro':
+      return 'Pasar a mi banco';
+    case 'reportar':
+      return 'Reportar';
+    case 'avisos-config':
+      return 'Avisos y bloqueos';
   }
 }
 
-function contenidoPanel(p: PanelAbierto, cerrarBienvenida: () => void, villa: Barrio) {
+function contenidoPanel(
+  p: PanelAbierto,
+  cerrarBienvenida: () => void,
+  villa: Barrio,
+  pendientesLegales: DatosDocumento[],
+  alAceptarLegal: () => void,
+) {
   switch (p.tipo) {
     case 'bienvenida':
       return <PanelBienvenida onListo={cerrarBienvenida} />;
@@ -416,7 +608,19 @@ function contenidoPanel(p: PanelAbierto, cerrarBienvenida: () => void, villa: Ba
     case 'perfil':
       return <PanelPerfil />;
     case 'mi-local':
-      return <PanelMiLocal />;
+      return <PanelMiLocal key={p.localId ?? 'principal'} localId={p.localId} />;
+    case 'mis-locales':
+      return <PanelMisLocales />;
+    case 'personalizar':
+      return <PanelPersonalizar />;
+    case 'personaje':
+      return <PanelPersonaje />;
+    case 'portafolio':
+      return <PanelPortafolio key={p.usuarioId} usuarioId={p.usuarioId} />;
+    case 'proyecto':
+      return <PanelProyecto key={p.id} id={p.id} />;
+    case 'mi-portafolio':
+      return <PanelMiPortafolio />;
     case 'buscar':
       return <PanelBuscar pestana={p.pestana ?? 'servicios'} />;
     case 'arbitro':
@@ -429,5 +633,25 @@ function contenidoPanel(p: PanelAbierto, cerrarBienvenida: () => void, villa: Ba
       return <PanelBusqueda key={p.id} id={p.id} />;
     case 'publicar-busqueda':
       return <PanelPublicarBusqueda barrio={p.barrio ?? villa} />;
+    case 'legal':
+      return <PanelLegal key={p.documento} documento={p.documento} />;
+    case 'aceptar-legal':
+      return pendientesLegales.length ? (
+        <PanelAceptarLegal pendientes={pendientesLegales} onListo={alAceptarLegal} />
+      ) : (
+        <p className="tenue">Ya aceptaste todos los documentos vigentes.</p>
+      );
+    case 'comentarios':
+      return <PanelComentarios />;
+    case 'comentarios-equipo':
+      return <PanelComentariosEquipo />;
+    case 'wallets':
+      return <PanelWallets />;
+    case 'retiro':
+      return <PanelRetiro />;
+    case 'reportar':
+      return <PanelReportar key={p.objetoId} reporte={p.reporte} objetoId={p.objetoId} nombre={p.nombre} />;
+    case 'avisos-config':
+      return <PanelAvisosFuera />;
   }
 }
