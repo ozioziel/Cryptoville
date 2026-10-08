@@ -8,6 +8,8 @@
 //   Los pedidos "solicitado" y "aceptado" sí se pueden continuar de verdad en Stellar Lab.
 // - Si la base ya tiene usuarios que NO son de ejemplo, el seed se detiene (usa --forzar para borrar todo).
 //
+// - En mainnet no corre nunca: los datos de ejemplo son solo para testnet.
+//
 // Uso: npm run db:seed   (o npm run db:seed -- --forzar)
 import { config as cargarEnv } from 'dotenv';
 import { existsSync, readFileSync } from 'node:fs';
@@ -207,6 +209,10 @@ async function asegurarCuentaAuth(direccion: string): Promise<string> {
 }
 
 async function main() {
+  if ((process.env.STELLAR_NETWORK ?? 'testnet') === 'mainnet') {
+    console.error('El seed no corre en mainnet: los usuarios y pedidos de ejemplo son solo para testnet.');
+    process.exit(1);
+  }
   const archivo = path.join(raiz, '.seed-keys.json');
   if (!existsSync(archivo)) throw new Error('No existe .seed-keys.json: ejecuta primero `npm run seed:keys`');
   const llaves = JSON.parse(readFileSync(archivo, 'utf8')) as { usuarios: LlaveEjemplo[] };
@@ -238,6 +244,7 @@ async function main() {
   console.log('Creando usuarios, locales y servicios…');
   const ids: Record<string, string> = {};
   const servicios: Record<string, { id: string; titulo: string; precio_usdc: string }[]> = {};
+  const localDe: Record<string, string> = {};
   for (const u of llaves.usuarios) {
     const perfil = PERFILES[u.clave];
     const id = await asegurarCuentaAuth(u.publica);
@@ -245,9 +252,12 @@ async function main() {
     await prisma.usuario.create({
       data: { id, direccion: u.publica, nombre: u.nombre, rol: u.rol, bio: perfil.bio, avatar: perfil.avatar, apariencia: { ...perfil.apariencia } },
     });
+    // Su wallet es la de la cuenta y donde cobra (como cualquier cuenta nueva).
+    await prisma.wallet.create({ data: { usuario_id: id, direccion: u.publica, metodo: 'llave-prueba', de_la_cuenta: true, para_cobrar: true } });
     const local = await prisma.local.create({
       data: { usuario_id: id, ...perfil.local, apariencia: { ...perfil.local.apariencia } },
     });
+    localDe[u.clave] = local.id;
     servicios[u.clave] = [];
     for (const s of SERVICIOS[u.clave]) {
       const creado = await prisma.servicio.create({ data: { local_id: local.id, ...s } });
@@ -402,7 +412,8 @@ async function main() {
     });
     for (const p of b.propuestas ?? []) {
       await prisma.propuesta.create({
-        data: { busqueda_id: fila.id, proveedor_id: ids[p.proveedor], monto_usdc: p.monto, dias_entrega: p.dias, mensaje: p.mensaje },
+        // v2: cada propuesta dice desde qué local se manda.
+        data: { busqueda_id: fila.id, proveedor_id: ids[p.proveedor], local_id: localDe[p.proveedor], monto_usdc: p.monto, dias_entrega: p.dias, mensaje: p.mensaje },
       });
       await prisma.aviso.create({
         data: {
@@ -432,6 +443,52 @@ async function main() {
     autor: 'ana', titulo: 'Clases de inglés para presentar a clientes', barrio: 'academy', categoria: 'idiomas', presupuesto: '20', dias: 12,
     descripcion: 'Busco dos clases de conversación en inglés para practicar presentaciones de proyectos de diseño.',
   });
+
+  // v2: portafolio (experiencia y proyectos). Los destacados cuelgan como cuadros en la pared de su local.
+  console.log('Creando portafolios de ejemplo…');
+  const PORTAFOLIOS: Record<string, { experiencias: { puesto: string; lugar: string; desde: string; hasta?: string; descripcion: string }[]; proyectos: { titulo: string; descripcion: string; fecha: string; destacado?: boolean; video?: string }[] }> = {
+    ana: {
+      experiencias: [
+        { puesto: 'Diseñadora gráfica', lugar: 'Por mi cuenta', desde: '2022-03-01', descripcion: 'Identidad visual para emprendimientos y comercios de barrio.' },
+        { puesto: 'Asistente de diseño', lugar: 'Estudio de branding', desde: '2020-01-15', hasta: '2022-02-28', descripcion: 'Logos, paletas y piezas para redes.' },
+      ],
+      proyectos: [
+        { titulo: 'Identidad para una cafetería', descripcion: 'Logo, paleta de colores y menú impreso para una cafetería pequeña.', fecha: '2026-04-10', destacado: true },
+        { titulo: 'Etiquetas para una marca de miel', descripcion: 'Familia de etiquetas para tres tamaños de frasco, con ilustración propia.', fecha: '2026-02-02', destacado: true },
+      ],
+    },
+    luis: {
+      experiencias: [{ puesto: 'Editor de video', lugar: 'Canal de cocina en YouTube', desde: '2023-06-01', descripcion: 'Edición semanal, subtítulos y miniaturas.' }],
+      proyectos: [
+        { titulo: 'Tráiler de un cortometraje', descripcion: 'Montaje, corrección de color y sonido de un tráiler de 60 segundos.', fecha: '2026-05-20', destacado: true, video: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ' },
+      ],
+    },
+    diego: {
+      experiencias: [{ puesto: 'Desarrollador web', lugar: 'Agencia digital', desde: '2021-09-01', descripcion: 'Sitios y tiendas en línea con React y Node.' }],
+      proyectos: [{ titulo: 'Tienda en línea de repuestos', descripcion: 'Catálogo con buscador, carrito y pagos para una tienda de repuestos de computadoras.', fecha: '2026-03-08', destacado: true }],
+    },
+  };
+  for (const [clave, p] of Object.entries(PORTAFOLIOS)) {
+    if (!ids[clave]) continue;
+    for (const [orden, e] of p.experiencias.entries()) {
+      await prisma.experiencia.create({
+        data: { usuario_id: ids[clave], puesto: e.puesto, lugar: e.lugar, desde: new Date(e.desde), hasta: e.hasta ? new Date(e.hasta) : null, descripcion: e.descripcion, orden },
+      });
+    }
+    for (const [orden, x] of p.proyectos.entries()) {
+      await prisma.proyecto.create({
+        data: {
+          usuario_id: ids[clave],
+          titulo: x.titulo,
+          descripcion: x.descripcion,
+          fecha: new Date(x.fecha),
+          destacado: x.destacado ?? false,
+          orden,
+          videos: x.video ? [{ tipo: 'youtube', id: x.video.split('v=')[1], url: x.video }] : [],
+        },
+      });
+    }
+  }
 
   console.log('✔ Datos de ejemplo cargados:');
   for (const u of llaves.usuarios) {
