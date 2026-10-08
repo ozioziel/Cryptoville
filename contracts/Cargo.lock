@@ -398,6 +398,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cryptoville-escrow-v2"
+version = "0.2.0"
+dependencies = [
+ "cryptoville-usdc-prueba",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "cryptoville-usdc-prueba"
 version = "0.1.0"
 dependencies = [

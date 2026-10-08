@@ -1,0 +1,17 @@
+[package]
+name = "cryptoville-escrow-v2"
+version = "0.2.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib", "cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+# Solo en pruebas: confirma que el escrow funciona con el token "USDC de prueba".
+cryptoville-usdc-prueba = { path = "../usdc-prueba" }
