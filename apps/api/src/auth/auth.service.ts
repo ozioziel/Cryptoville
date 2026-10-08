@@ -6,7 +6,7 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AVATARES, mensajeInicioSesion, VIGENCIA_DESAFIO_SEG } from '@cryptoville/shared';
+import { AVATARES, datosRed, mensajeInicioSesion, VIGENCIA_DESAFIO_SEG, type MetodoEntrada } from '@cryptoville/shared';
 import { randomBytes } from 'node:crypto';
 import { CONFIGURACION, type Configuracion } from '../config/configuracion';
 import type { Usuario } from '../generated/prisma/client';
@@ -30,8 +30,10 @@ export interface SesionEmitida {
  *    de Supabase Auth para esa wallet. Así RLS y Realtime reconocen al usuario igual en
  *    local y en la nube, sin firmar JWT propios.
  *
- * Cada wallet tiene una cuenta en Supabase Auth con un correo interno y una contraseña
- * derivada (HMAC con AUTH_PASSWORD_SECRET) que nunca sale del servidor.
+ * Cada cuenta tiene una cuenta en Supabase Auth con un correo interno y una contraseña
+ * derivada (HMAC con AUTH_PASSWORD_SECRET) que nunca sale del servidor. Las dos salen de la
+ * "wallet de la cuenta" (con la que se creó). La persona puede sumar más wallets (tabla `wallets`):
+ * entrar con cualquiera de ellas abre la misma cuenta.
  */
 @Injectable()
 export class AuthService {
@@ -52,6 +54,8 @@ export class AuthService {
       nonce,
       dominio: this.config.publicHost,
       emitido: new Date().toISOString(),
+      // La red va en el mensaje: una firma de testnet no sirve en mainnet.
+      red: datosRed(this.config.stellar.red).label,
     });
     await this.prisma.desafioLogin.create({ data: { nonce, direccion, mensaje, expira_en: expira } });
     // Limpieza de desafíos viejos.
@@ -59,9 +63,9 @@ export class AuthService {
     return { nonce, mensaje, expira_en: expira.toISOString() };
   }
 
-  async verificar(direccion: string, nonce: string, firma: string): Promise<SesionEmitida> {
+  async verificar(direccion: string, nonce: string, firma: string, metodo: MetodoEntrada = 'wallet'): Promise<SesionEmitida> {
     const desafio = await this.prisma.desafioLogin.findUnique({ where: { nonce } });
-    if (!desafio || desafio.direccion !== direccion || desafio.expira_en < new Date()) {
+    if (!desafio || desafio.direccion !== direccion || desafio.expira_en < new Date() || desafio.proposito !== 'entrar') {
       throw new UnauthorizedException('El código de inicio de sesión no es válido o ya venció; vuelve a intentarlo');
     }
     // Se marca como usado de forma atómica: un desafío sirve una sola vez.
@@ -74,11 +78,20 @@ export class AuthService {
     if (!verificarFirmaSep53(direccion, desafio.mensaje, firma)) {
       throw new UnauthorizedException('La firma no corresponde a esa wallet');
     }
-    return this.emitirSesion(direccion);
+    if (metodo === 'llave-prueba' && this.config.stellar.red === 'mainnet') {
+      throw new UnauthorizedException('En mainnet no se entra con llaves de prueba');
+    }
+    // ¿Es una wallet que ya está en una cuenta? Entonces se abre esa cuenta.
+    const vinculada = await this.prisma.wallet.findUnique({ where: { direccion }, include: { usuario: true } });
+    if (vinculada) return this.emitirSesion(vinculada.usuario.direccion, metodo);
+    return this.emitirSesion(direccion, metodo);
   }
 
-  /** Obtiene (o crea) la cuenta de Supabase Auth de la wallet y devuelve una sesión. */
-  async emitirSesion(direccion: string): Promise<SesionEmitida> {
+  /**
+   * Obtiene (o crea) la cuenta de Supabase Auth de la wallet de la cuenta y devuelve una sesión.
+   * Si la cuenta es nueva, su wallet queda como "de la cuenta" y "para cobrar".
+   */
+  async emitirSesion(direccion: string, metodo: MetodoEntrada = 'wallet'): Promise<SesionEmitida> {
     const credenciales = { email: this.correoDe(direccion), password: this.contrasenaDe(direccion) };
     const cliente = this.supabase.publico();
 
@@ -105,6 +118,12 @@ export class AuthService {
       where: { id: user.id },
       update: {},
       create: { id: user.id, direccion, nombre: `Vecino ${direccion.slice(-4)}`, avatar: avatarPorDefecto(direccion) },
+    });
+    // Toda cuenta tiene su wallet en la tabla `wallets` (las anteriores a las wallets múltiples, también).
+    await this.prisma.wallet.upsert({
+      where: { direccion: usuario.direccion },
+      update: {},
+      create: { usuario_id: usuario.id, direccion: usuario.direccion, metodo, de_la_cuenta: true, para_cobrar: true },
     });
     return {
       access_token: session.access_token,

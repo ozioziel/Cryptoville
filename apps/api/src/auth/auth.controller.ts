@@ -1,6 +1,7 @@
 import { Body, Controller, HttpCode, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { IsString, Length, Matches } from 'class-validator';
+import { METODOS_ENTRADA, type MetodoEntrada } from '@cryptoville/shared';
+import { IsIn, IsOptional, IsString, Length, Matches } from 'class-validator';
 import { serializar } from '../common/serializar';
 import { AuthService } from './auth.service';
 
@@ -16,6 +17,11 @@ class VerificarDto extends DesafioDto {
   @IsString()
   @Length(64, 200, { message: 'Firma inválida' })
   firma: string;
+
+  /** Cómo entró: su wallet, Pollar (correo) o una llave de prueba (solo testnet). */
+  @IsOptional()
+  @IsIn([...METODOS_ENTRADA], { message: 'Método de entrada inválido' })
+  metodo?: MetodoEntrada;
 }
 
 @Controller('auth')
@@ -35,6 +41,6 @@ export class AuthController {
   @Post('verificar')
   @HttpCode(200)
   async verificar(@Body() dto: VerificarDto) {
-    return serializar(await this.auth.verificar(dto.direccion, dto.nonce, dto.firma));
+    return serializar(await this.auth.verificar(dto.direccion, dto.nonce, dto.firma, dto.metodo));
   }
 }
