@@ -29,6 +29,8 @@ export interface ConfigPublica {
   verificacion_en_cadena?: boolean;
   servicios?: {
     pollar_api_key: string | null;
+    /** «Entrar con Google» encendido (POLLAR_GOOGLE=si). */
+    pollar_google?: boolean;
     walletconnect_project_id: string | null;
     kyc: boolean;
     videos: boolean;

@@ -12,8 +12,11 @@ import {
  * Si falta alguna, la función no aparece en la app y nada se rompe.
  */
 export interface ServiciosExternos {
-  /** Entrar con correo (wallet embebida). La llave es pública: la usa el navegador. */
-  pollar: { apiKey: string } | null;
+  /**
+   * Entrar con correo (wallet embebida). La llave es pública: la usa el navegador.
+   * `google`: el botón «Entrar con Google» (POLLAR_GOOGLE=si). Apagado por defecto: falta probarlo (docs/simulaciones.md).
+   */
+  pollar: { apiKey: string; google: boolean } | null;
   /** QR para firmar con la wallet del celular. El id es público. */
   walletConnect: { projectId: string } | null;
   /** KYC (una persona = una cuenta). */
@@ -167,13 +170,17 @@ export function leerConfiguracion(env: NodeJS.ProcessEnv = process.env): Configu
   if (verificarTexto && !['si', 'no'].includes(verificarTexto)) throw new Error('STELLAR_VERIFICAR debe ser "si" o "no"');
   const verificar = verificarTexto ? verificarTexto === 'si' : entorno !== 'test';
 
+  const textoGoogle = opcional(env, 'POLLAR_GOOGLE');
+  if (textoGoogle && !['si', 'no'].includes(textoGoogle)) throw new Error('POLLAR_GOOGLE debe ser "si" o "no"');
+  const pollarGoogle = textoGoogle === 'si';
+
   const entornoServicios = (opcional(env, 'ENTORNO_SERVICIOS') ?? 'pruebas') as Configuracion['entornoServicios'];
   if (entornoServicios !== 'pruebas' && entornoServicios !== 'produccion') {
     throw new Error('ENTORNO_SERVICIOS debe ser "pruebas" o "produccion"');
   }
 
   const servicios: ServiciosExternos = {
-    pollar: servicio(env, 'la entrada con correo (Pollar)', ['POLLAR_API_KEY'], (v) => ({ apiKey: v.POLLAR_API_KEY })),
+    pollar: servicio(env, 'la entrada con correo (Pollar)', ['POLLAR_API_KEY'], (v) => ({ apiKey: v.POLLAR_API_KEY, google: pollarGoogle })),
     walletConnect: servicio(env, 'el QR de WalletConnect', ['WALLETCONNECT_PROJECT_ID'], (v) => ({ projectId: v.WALLETCONNECT_PROJECT_ID })),
     didit: servicio(env, 'el KYC (Didit)', ['DIDIT_API_KEY', 'DIDIT_WORKFLOW_ID', 'DIDIT_WEBHOOK_SECRET', 'KYC_HMAC_SECRET'], (v) => ({
       apiKey: v.DIDIT_API_KEY,

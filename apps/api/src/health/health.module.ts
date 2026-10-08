@@ -70,6 +70,8 @@ export class HealthController {
       verificacion_en_cadena: this.stellar.verifica,
       servicios: {
         pollar_api_key: sv.pollar?.apiKey ?? null,
+        /** «Entrar con Google» (con Pollar): solo con POLLAR_GOOGLE=si. */
+        pollar_google: Boolean(sv.pollar?.google),
         walletconnect_project_id: sv.walletConnect?.projectId ?? null,
         kyc: Boolean(sv.didit && this.config.secretoKyc),
         videos: Boolean(sv.mux),

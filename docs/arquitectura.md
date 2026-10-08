@@ -208,7 +208,7 @@ cryptoville/
 | Tema | Cómo funciona |
 |---|---|
 | **Varias wallets** | Una persona es una cuenta (`usuarios`) con varias wallets (`wallets`): una de la cuenta y una para cobrar. Para sumar una, la wallet nueva firma un mensaje que nombra la cuenta (`mensajeVincularWallet`) |
-| **Entrar** | Con Pollar configurado: botón grande «Entrar con Google», debajo «Entrar con tu correo» y, más chico, «¿Ya usas Web3? Conecta tu wallet». Pollar crea la wallet por detrás y firma el mensaje de inicio de sesión; la cuenta nueva toma el nombre de Google. En testnet se conserva la entrada con una llave de prueba |
+| **Entrar** | Con Pollar configurado: botón grande «Entrar con tu correo» (o «Entrar con Google», si `POLLAR_GOOGLE=si`; hoy apagado) y, más chico, «¿Ya usas Web3? Conecta tu wallet». Pollar crea la wallet por detrás y firma el mensaje de inicio de sesión; la cuenta nueva toma el nombre de Google. En testnet se conserva la entrada con una llave de prueba |
 | **KYC (Didit)** | Una persona, una cuenta. Se guarda solo una **huella HMAC** de país, tipo y número de documento (`KYC_HMAC_SECRET`): nunca fotos ni el número. Una huella repetida no verifica otra cuenta. Se exige para abrir un local, cobrar y reseñar (`kyc.exigidoPara`). La insignia ✔ va junto al nombre: sobre la cabeza, en el perfil, en las propuestas y en los locales |
 | **Reportar y bloquear** | `reportes` y `bloqueos`. El equipo revisa la cola en el panel del árbitro y puede descartar, ocultar el contenido o suspender la cuenta. Un bloqueo impide pedidos, propuestas y chat en los dos sentidos |
 | **Avisos fuera de la app** | Web Push (VAPID, `public/sw.js`) y correo (Resend), con preferencias por persona. Recordatorios de plazos (`recordatorios`) |

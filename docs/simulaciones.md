@@ -7,7 +7,7 @@ Lo que hoy funciona **de mentira** (para poder probar el flujo completo en testn
 | 1 | Pagar con el QR del banco | 🟡 **Simulada** en testnet | `apps/api/src/rampas/`, `apps/web/src/ui/pagos/PagarConQr.tsx`, `packages/shared/src/rampas.ts` |
 | 2 | Pasar a mi banco (retiro) | 🟡 **Simulada** en testnet; con Pollar **no está hecha** | `apps/api/src/rampas/`, `apps/web/src/ui/panels/PanelRetiro.tsx` |
 | 3 | Rampa real con Pollar (QR del banco) | 🟠 **Programada, sin probar** | `apps/web/src/features/rampas/pollar.ts` |
-| 4 | Entrar con Google | 🟠 **Real, sin probar** con una cuenta de Google | `apps/web/src/features/auth/pollar.ts`, `sesion.tsx`, `PanelBienvenida.tsx` |
+| 4 | Entrar con Google | 🔴 **Apagado** (`POLLAR_GOOGLE` vacío): programado con Pollar, pero en la prueba no funcionó | `apps/web/src/features/auth/pollar.ts`, `sesion.tsx`, `PanelBienvenida.tsx` |
 | 5 | Entrar con el correo (Pollar) | 🟠 **Real, sin probar**: el panel de Pollar lo marca «próximamente» | los mismos archivos |
 | 6 | KYC (Didit) | 🟡 **Sandbox**: verifica sin cobrar y sin validez real | `apps/api/src/kyc/` |
 | 7 | Cuentas «prueba-…» verificadas | 🟡 **De mentira**, solo en la base local | `scripts/datos-de-prueba.mjs` |
@@ -16,7 +16,7 @@ Lo que hoy funciona **de mentira** (para poder probar el flujo completo en testn
 | 10 | Webhooks de Didit y Mux en tu PC | 🟡 No llegan (apuntan al servidor); la app consulta el estado sola | `kyc/`, `videos/` |
 | 11 | Textos legales | 🟡 **Ejemplos** escritos por una IA | `apps/web/src/legal/` |
 
-🟡 simulado a propósito · 🟠 programado, falta probarlo con el servicio real
+🟡 simulado a propósito · 🟠 programado, falta probarlo con el servicio real · 🔴 programado pero apagado
 
 ---
 
@@ -69,6 +69,10 @@ Más contexto, preguntas abiertas y el plan B (Meru, otros *anchors*): `docs/pro
 ## 4 y 5. Entrar con Google y con el correo
 
 **Es real, no simulado:** usa el login de Pollar (`login({ provider: 'google' })`, en una ventana de Google). La app «Cryptoville» de Pollar tiene encendidos Google y el correo; se comprobó con su `applications/config`.
+
+**Google está apagado (8 oct 2026):** en la prueba con una cuenta de Google no funcionó. El botón solo aparece con `POLLAR_GOOGLE=si`; sin eso, el botón grande vuelve a ser «Entrar con tu correo». Antes de encenderlo, revisar con Pollar por qué falla (su panel marca el login como «próximamente»).
+
+**Solo funciona con HTTPS o en `localhost`:** Pollar usa funciones del navegador que solo existen en páginas seguras. En el VPS con `http://IP:puerto` no funciona: ahí conviene dejar `POLLAR_API_KEY` vacío hasta tener HTTPS.
 
 **Falta probarlo** con una cuenta de Google de verdad:
 - En el panel de Pollar (**Build → Domains**) tienen que estar `http://localhost:5173` y la dirección de la página desplegada.

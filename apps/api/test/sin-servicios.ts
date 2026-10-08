@@ -2,6 +2,7 @@
 // así dan lo mismo en cualquier PC y en CI. La prueba que necesite uno lo enciende ella misma.
 for (const variable of [
   'POLLAR_API_KEY',
+  'POLLAR_GOOGLE',
   'WALLETCONNECT_PROJECT_ID',
   'DIDIT_API_KEY',
   'DIDIT_WORKFLOW_ID',

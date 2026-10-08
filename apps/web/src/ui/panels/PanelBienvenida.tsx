@@ -23,6 +23,8 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
   const [conGoogle, setConGoogle] = useState(false);
   const config = obtenerConfig();
   const hayCorreo = Boolean(servicios().pollar_api_key);
+  // «Entrar con Google» está apagado hasta probarlo con Pollar (POLLAR_GOOGLE=si; ver docs/simulaciones.md).
+  const hayGoogle = hayCorreo && Boolean(servicios().pollar_google);
 
   const intentar = async (fn: () => Promise<void>, terminar = true) => {
     setError(null);
@@ -64,7 +66,7 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
         </button>
       ) : (
         <>
-          {hayCorreo && (
+          {hayGoogle && (
             <>
               <button
                 type="button"
@@ -92,7 +94,7 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
             </>
           )}
           {hayCorreo && !conCorreo && (
-            <button type="button" className="boton" disabled={ocupado} onClick={() => setConCorreo(true)}>
+            <button type="button" className={hayGoogle ? 'boton' : 'boton boton-primario boton-grande'} disabled={ocupado} onClick={() => setConCorreo(true)}>
               Entrar con tu correo
             </button>
           )}
@@ -121,7 +123,11 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
                   <button type="submit" className="boton boton-primario" disabled={ocupado || !/^\S+@\S+\.\S+$/.test(correo) || pasoCorreo.paso === 'enviando'}>
                     {pasoCorreo.paso === 'enviando' ? 'Enviando el código…' : 'Enviarme un código'}
                   </button>
-                  <p className="tenue pequeno">Te mandamos un código de un solo uso a tu correo.</p>
+                  <p className="tenue pequeno">
+                    {hayGoogle
+                      ? 'Te mandamos un código de un solo uso a tu correo.'
+                      : 'Te creamos una cuenta con su propia wallet de Stellar. No tienes que anotar ninguna clave: la guarda nuestro proveedor de cuentas (Pollar), nunca Cryptoville.'}
+                  </p>
                 </form>
               ) : (
                 <form
