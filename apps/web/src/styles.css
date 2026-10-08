@@ -1,5 +1,5 @@
 /*
- * Cryptoville: estilo "profesional amable" de la Villa Audiovisual aprobada
+ * WorkVille: estilo "profesional amable" de la Villa Audiovisual aprobada
  * (docs/propuestas/estilo-visual/muestra-villa-audiovisual.html).
  * Bordes finos, radio de 12 px en controles y 18 px en paneles, sombra suave y Plus Jakarta Sans.
  */
@@ -180,6 +180,11 @@ button.pastilla:hover {
   font-weight: 800;
   font-size: 18px;
   letter-spacing: -0.02em;
+}
+.logo-imagen {
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 .punto {
   width: 10px;
@@ -896,8 +901,18 @@ button.servicio:hover {
   gap: 14px;
   align-items: center;
 }
-.bienvenida-cabecera svg {
-  flex-shrink: 0;
+.bienvenida-marca {
+  margin: 0;
+  font-size: clamp(26px, 5vw, 34px);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+.bienvenida-lema {
+  margin: 8px 0 0;
+  color: var(--tenue);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .dato-curioso {

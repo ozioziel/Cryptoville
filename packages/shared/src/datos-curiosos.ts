@@ -38,7 +38,7 @@ export const DATOS_CURIOSOS: readonly DatoCurioso[] = [
   },
   {
     tema: 'stellar',
-    texto: 'Un stroop es la unidad más pequeña: la diezmillonésima parte de un lumen (0,0000001 XLM). Por eso los montos tienen 7 decimales, igual que el USDC de prueba de Cryptoville.',
+    texto: 'Un stroop es la unidad más pequeña: la diezmillonésima parte de un lumen (0,0000001 XLM). Por eso los montos tienen 7 decimales, igual que el USDC de prueba de WorkVille.',
     fuente: `${DOCS}/learn/fundamentals/fees-resource-limits-metering`,
   },
   {
@@ -118,7 +118,7 @@ export const DATOS_CURIOSOS: readonly DatoCurioso[] = [
   },
   {
     tema: 'stellar',
-    texto: 'Las cuentas de Stellar tienen direcciones que empiezan con G, como las de los vecinos de Cryptoville.',
+    texto: 'Las cuentas de Stellar tienen direcciones que empiezan con G, como las de los vecinos de WorkVille.',
     fuente: `${DOCS}/learn/fundamentals/stellar-data-structures/accounts`,
   },
   {

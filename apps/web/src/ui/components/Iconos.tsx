@@ -49,13 +49,17 @@ export function Icono({ nombre, tamano = 18, color, etiqueta }: { nombre: Nombre
   );
 }
 
-/** Logo: ícono de casa sobre un cuadrado coral. */
-export function LogoIcono({ tamano = 24 }: { tamano?: number }) {
+/** Marca de WorkVille, compartida por la cabecera y la bienvenida. */
+export function LogoIcono({ tamano = 32 }: { tamano?: number }) {
   return (
-    <svg width={tamano} height={tamano} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect width="24" height="24" rx="7" fill="#e07a5f" />
-      <path d="M6 12L12 7L18 12V18H6Z" fill="#fdf6e3" />
-      <circle cx="12" cy="14" r="2.2" fill="#e07a5f" />
-    </svg>
+    <img
+      className="logo-imagen"
+      src="/branding/workville-logo.png"
+      width={tamano}
+      height={tamano}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+    />
   );
 }

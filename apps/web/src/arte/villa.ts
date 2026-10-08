@@ -275,11 +275,11 @@ export function edificioCentral(barrio: Barrio): EdificioCentral {
         g(`<circle cx="420" cy="390" r="9" fill="#8fc47a"/><circle cx="500" cy="390" r="9" fill="#8fc47a"/>`) +
         `<circle cx="417" cy="387" r="2" fill="#e07a5f"/><circle cx="503" cy="388" r="2" fill="${DORADO}"/>`;
       return {
-        nombre: 'Galería Cryptoville',
+        nombre: 'Galería WorkVille',
         cuerpo: pieza(328, 56, 264, 278, cuerpo),
         frente: pieza(404, 330, 112, 100, frente),
         textos: [
-          { x: 460, y: 177, texto: 'GALERÍA CRYPTOVILLE', tamano: 16, peso: 800, color: '#b85a42', espaciado: 1.2 },
+          { x: 460, y: 177, texto: 'GALERÍA WORKVILLE', tamano: 16, peso: 800, color: '#b85a42', espaciado: 1.2 },
           { x: 460, y: 192, texto: 'Muestra: datos curiosos de Stellar', tamano: 11, peso: 700, color: TINTA },
         ],
         luces: [],
@@ -353,7 +353,7 @@ export function edificioCentral(barrio: Barrio): EdificioCentral {
         `<path d="M430 372H490M430 392H490M430 412H490M450 352V372M470 372V392M450 392V412M470 412V428" stroke="#b8a68a" stroke-width="1.2"/>` +
         postes;
       return {
-        nombre: 'Biblioteca Cryptoville',
+        nombre: 'Biblioteca WorkVille',
         cuerpo: pieza(326, -8, 268, 342, cuerpo),
         frente: pieza(404, 330, 112, 100, frente),
         textos: [
@@ -382,11 +382,11 @@ export function edificioCentral(barrio: Barrio): EdificioCentral {
         `<circle cx="547" cy="246" r="11" fill="${CREMA}" opacity=".8"/><circle cx="547" cy="246" r="4" fill="${DORADO}"/>`;
       const frente = `<rect x="430" y="332" width="60" height="96" fill="#b5554f"/>` + postes;
       return {
-        nombre: 'Cine Cryptoville',
+        nombre: 'Cine WorkVille',
         cuerpo: pieza(328, 56, 264, 278, cuerpo),
         frente: pieza(404, 330, 112, 100, frente),
         textos: [
-          { x: 460, y: 177, texto: 'CINE CRYPTOVILLE', tamano: 17, peso: 800, color: '#7e3f43', espaciado: 1.36 },
+          { x: 460, y: 177, texto: 'CINE WORKVILLE', tamano: 17, peso: 800, color: '#7e3f43', espaciado: 1.36 },
           { x: 460, y: 192, texto: 'Hoy: ¿Cómo funciona Stellar?', tamano: 11, peso: 700, color: TINTA },
         ],
         luces: [],

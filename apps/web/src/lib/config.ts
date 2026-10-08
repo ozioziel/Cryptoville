@@ -20,7 +20,7 @@ let config: ConfigPublica | null = null;
 export async function cargarConfig(): Promise<ConfigPublica> {
   if (config) return config;
   const r = await fetch('/api/config');
-  if (!r.ok) throw new Error('No se pudo conectar con la API de Cryptoville');
+  if (!r.ok) throw new Error('No se pudo conectar con la API de WorkVille');
   config = (await r.json()) as ConfigPublica;
   return config;
 }

@@ -69,7 +69,7 @@ export function PanelLote({ lote, barrio }: { lote: number; barrio?: Barrio }) {
             : 'Sin reseñas'}
         </span>
         <span className="chip chip-verde">{rep?.nivel ?? 'Nuevo'}</span>
-        {local.usuario.rol === 'arbitro' && <span className="chip chip-info">Equipo Cryptoville</span>}
+        {local.usuario.rol === 'arbitro' && <span className="chip chip-info">Equipo WorkVille</span>}
       </div>
       {local.descripcion && <p>{local.descripcion}</p>}
 

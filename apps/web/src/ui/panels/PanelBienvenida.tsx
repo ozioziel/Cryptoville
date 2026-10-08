@@ -6,7 +6,7 @@ import { obtenerConfig } from '../../lib/config';
 import { Aviso, Garantia } from '../components/basicos';
 import { LogoIcono } from '../components/Iconos';
 
-/** Qué es Cryptoville y cómo entrar con la wallet. */
+/** Qué es WorkVille y cómo entrar con la wallet. */
 export function PanelBienvenida({ onListo }: { onListo: () => void }) {
   const { usuario, entrarConWallet, entrarConSecreta } = useSesion();
   const [error, setError] = useState<string | null>(null);
@@ -30,11 +30,15 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
   return (
     <div className="pila">
       <div className="bienvenida-cabecera">
-        <LogoIcono tamano={44} />
-        <p className="destacado">
-          Un pueblo donde las personas ofrecen sus servicios, los encuentran y se pagan <strong>en garantía</strong> con Stellar.
-        </p>
+        <LogoIcono tamano={88} />
+        <div>
+          <p className="bienvenida-marca">WorkVille</p>
+          <p className="bienvenida-lema">Talento y aprendizaje, en una sola villa.</p>
+        </div>
       </div>
+      <p className="destacado">
+        Explora los barrios, encuentra profesionales y contrata sus servicios con pago <strong>en garantía</strong> con Stellar.
+      </p>
       <ol className="lista-pasos">
         <li>Camina por las villas (flechas o WASD; en el celular, el joystick) y entra a los locales con <kbd>E</kbd>.</li>
         <li>Pide un servicio. Cuando el proveedor acepta, pagas en garantía desde Stellar Lab.</li>
