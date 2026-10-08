@@ -88,6 +88,7 @@ const CLASE_ESTADO: Record<EstadoPedido, string> = {
   liberado: 'exito',
   reembolsado: 'apagado',
   resuelto: 'exito',
+  finalizado: 'exito',
 };
 
 export function EstadoPedidoBadge({ estado }: { estado: EstadoPedido }) {

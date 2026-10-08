@@ -14,9 +14,22 @@ import { OrdersModule } from './orders/orders.module';
 import { PrismaModule } from './prisma/prisma.service';
 import { ReputationModule } from './reputation/reputation.module';
 import { ServicesModule } from './services/services.module';
+import { LocalesModule } from './locales/locales.module';
+import { RampasModule } from './rampas/rampas.module';
+import { PortafolioModule } from './portafolio/portafolio.module';
+import { CercaniaModule } from './cercania/cercania.module';
 import { SupabaseModule } from './supabase/supabase.service';
 import { UploadsModule } from './uploads/uploads.module';
 import { UsersModule } from './users/users.controller';
+import { ArranqueModule } from './config/arranque.module';
+import { LegalModule } from './legal/legal.module';
+import { SincronizacionModule } from './sincronizacion/sincronizacion.module';
+import { StellarModule } from './stellar/stellar.module';
+import { WalletsModule } from './wallets/wallets.module';
+import { KycModule } from './kyc/kyc.module';
+import { ModeracionModule } from './moderacion/moderacion.module';
+import { RecordatoriosModule } from './notificaciones/recordatorios.module';
+import { VideosModule } from './videos/videos.module';
 
 const config = leerConfiguracion();
 
@@ -36,15 +49,28 @@ const config = leerConfiguracion();
     ConfiguracionModule,
     PrismaModule,
     SupabaseModule,
+    StellarModule,
+    ArranqueModule,
     AvisosModule,
+    KycModule,
+    ModeracionModule,
+    VideosModule,
     UsersModule,
     ServicesModule,
+    LocalesModule,
+    RampasModule,
+    PortafolioModule,
+    CercaniaModule,
     OrdersModule,
     BusquedasModule,
     DisputesModule,
     ReputationModule,
     UploadsModule,
     HealthModule,
+    WalletsModule,
+    LegalModule,
+    SincronizacionModule,
+    RecordatoriosModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, { provide: APP_GUARD, useClass: ThrottlerGuard }],

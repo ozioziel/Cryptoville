@@ -18,22 +18,48 @@ import {
   BARRIOS_ANTERIORES,
   LIMITES_SE_BUSCA,
   LISTA_BARRIOS,
+  METODOS_PAGO,
   esCategoriaDe,
   formatoUsdc,
   primerLoteLibre,
   type Barrio,
+  type MetodoPago,
+  type PlanFase,
 } from '@cryptoville/shared';
 import { Transform, Type } from 'class-transformer';
-import { IsDate, IsIn, IsInt, IsString, Length, Matches, Max, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
+  IsDate,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Length,
+  Matches,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { AvisosService } from '../avisos/avisos.service';
 import { SesionGuard } from '../common/sesion.guard';
 import { serializar } from '../common/serializar';
 import { UsuarioActual } from '../common/usuario-actual';
-import { Prisma, type Usuario } from '../generated/prisma/client';
+import { Prisma, type Local, type Usuario } from '../generated/prisma/client';
+import { OrdersModule } from '../orders/orders.module';
 import { nuevoNumero } from '../orders/orders.service';
+import { KycService } from '../kyc/kyc.module';
+import { LocalesModule, LocalesService } from '../locales/locales.module';
+import { ModeracionService } from '../moderacion/moderacion.module';
+import { PlanFaseDto } from '../pagos/pagos.controller';
+import { PortafolioModule, PortafolioService } from '../portafolio/portafolio.module';
+import { PagosService } from '../pagos/pagos.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { walletParaCobrar } from '../wallets/wallets.module';
+import { MONTO_USDC } from '../common/montos';
 
-const PRECIO = /^\d{1,9}(\.\d{1,7})?$/;
 const HORA = 3_600_000;
 const DIA = 24 * HORA;
 const L = LIMITES_SE_BUSCA;
@@ -55,7 +81,7 @@ class BusquedaDto {
   @IsString()
   categoria: string;
 
-  @Matches(PRECIO, { message: 'Presupuesto inválido (USDC, hasta 7 decimales)' })
+  @Matches(MONTO_USDC, { message: 'Presupuesto inválido (USDC mayor que 0, hasta 7 decimales)' })
   presupuesto_usdc: string;
 
   @Type(() => Date)
@@ -64,7 +90,7 @@ class BusquedaDto {
 }
 
 class PropuestaDto {
-  @Matches(PRECIO, { message: 'Monto inválido (USDC, hasta 7 decimales)' })
+  @Matches(MONTO_USDC, { message: 'Monto inválido (USDC mayor que 0, hasta 7 decimales)' })
   monto_usdc: string;
 
   @IsInt({ message: 'Los días de entrega deben ser un número entero' })
@@ -75,7 +101,38 @@ class PropuestaDto {
   @IsString()
   @Length(L.mensajeMin, L.mensajeMax, { message: `Cuenta tu propuesta (entre ${L.mensajeMin} y ${L.mensajeMax} caracteres)` })
   mensaje: string;
+
+  /** Local desde el que se propone (si tienes varios). Si no viene, el principal. */
+  @IsOptional()
+  @IsUUID('4')
+  local_id?: string;
+
+  /** Plan de fases (opcional): si quien publicó elige pagar por etapas, se usa este plan tal cual. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => PlanFaseDto)
+  fases?: PlanFaseDto[];
+
+  /** Proyectos del portafolio que se adjuntan (hasta 5). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(5)
+  @IsUUID('4', { each: true })
+  proyectos?: string[];
 }
+
+class AceptarPropuestaDto {
+  /** Cómo paga quien publicó. Si no viene, con garantía (como antes de v2). */
+  @IsOptional()
+  @IsIn(METODOS_PAGO, { message: 'Elige pagar directo, con garantía o por etapas' })
+  metodo_pago?: MetodoPago;
+}
+
+/** Para los avisos: «Espera su pago en garantía», «Paga por etapas para que empiece»… */
+const COMO_PAGA: Record<MetodoPago, string> = { directo: 'directo', garantia: 'en garantía', etapas: 'por etapas' };
 
 const montoPositivo = (monto: string, que: string) => {
   if (Number(monto) <= 0) throw new BadRequestException(`El ${que} tiene que ser mayor que 0`);
@@ -90,6 +147,11 @@ export class BusquedasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly avisos: AvisosService,
+    private readonly kyc: KycService,
+    private readonly moderacion: ModeracionService,
+    private readonly locales: LocalesService,
+    private readonly pagos: PagosService,
+    private readonly portafolio: PortafolioService,
   ) {}
 
   async publicar(autor: Usuario, dto: BusquedaDto) {
@@ -140,21 +202,42 @@ export class BusquedasService {
     return this.cargar(id);
   }
 
-  /** Un proveedor con local manda (o edita) su propuesta. */
+  /** Un proveedor con local manda (o edita) su propuesta, desde el local que elija y, si quiere, con su plan de fases. */
   async proponer(yo: Usuario, id: string, dto: PropuestaDto) {
     const busqueda = await this.cargar(id);
     if (busqueda.autor_id === yo.id) throw new BadRequestException('No puedes mandarte una propuesta a ti mismo');
     if (busqueda.estado !== 'abierta') throw new ConflictException('Este «Se busca» ya no recibe propuestas');
     if (busqueda.fecha_limite.getTime() <= Date.now()) throw new ConflictException('Este «Se busca» ya venció');
     montoPositivo(dto.monto_usdc, 'monto');
-    const local = await this.prisma.local.findUnique({ where: { usuario_id: yo.id } });
+    // Proponer es para cobrar: exige el KYC (si está encendido).
+    this.kyc.exigir(yo, 'cobrar');
+    await this.moderacion.exigirSinBloqueo(yo.id, busqueda.autor_id);
+    const local = dto.local_id ? await this.locales.propio(yo, dto.local_id) : await this.locales.principal(yo.id);
     if (!local || !local.activo) throw new ConflictException('Para mandar una propuesta, primero abre tu local');
+    let plan: PlanFase[] | null = null;
+    let dias = dto.dias_entrega;
+    if (dto.fases?.length) {
+      plan = dto.fases.map((f) => ({ ...f, descripcion: f.descripcion.trim(), pruebas: [...new Set(f.pruebas)] }));
+      this.pagos.validarPlanConMonto(plan, dto.monto_usdc);
+      // Con plan, el plazo es hasta la última fase.
+      dias = Math.min(L.diasMax, Math.max(1, Math.ceil((Date.parse(plan.at(-1)!.fecha_limite) - Date.now()) / DIA)));
+    }
+
+    const proyectos = await this.portafolio.proyectosPropios(yo, dto.proyectos ?? []);
 
     const anterior = await this.prisma.propuesta.findUnique({ where: { busqueda_id_proveedor_id: { busqueda_id: id, proveedor_id: yo.id } } });
     if (anterior && anterior.estado !== 'enviada' && anterior.estado !== 'retirada') {
       throw new ConflictException('Esta propuesta ya no se puede cambiar');
     }
-    const datos = { monto_usdc: dto.monto_usdc, dias_entrega: dto.dias_entrega, mensaje: dto.mensaje.trim(), estado: 'enviada' as const };
+    const datos = {
+      proyectos,
+      monto_usdc: dto.monto_usdc,
+      dias_entrega: dias,
+      mensaje: dto.mensaje.trim(),
+      estado: 'enviada' as const,
+      local_id: local.id,
+      plan: plan ? (plan as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+    };
     const propuesta = await this.prisma.$transaction(async (tx) => {
       const p = anterior
         ? await tx.propuesta.update({ where: { id: anterior.id }, data: datos })
@@ -188,22 +271,36 @@ export class BusquedasService {
   }
 
   /**
-   * Quien publicó elige una propuesta: nace un pedido ya aceptado, con el precio y el plazo de la propuesta.
-   * Para que el pedido funcione igual que los demás, se crea un servicio inactivo en el local del proveedor
+   * Quien publicó elige una propuesta y cómo paga: nace un pedido ya aceptado, con el precio y el plazo de la propuesta.
+   * - Por etapas: se usa el plan de la propuesta tal cual (elegir la propuesta es aceptar su plan).
+   * Para que el pedido funcione igual que los demás, se crea un servicio inactivo en el local de la propuesta
    * (no aparece en su local ni cuenta para el tope de servicios).
    */
-  async aceptar(yo: Usuario, propuestaId: string) {
+  async aceptar(yo: Usuario, propuestaId: string, metodo: MetodoPago = 'garantia') {
     const propuesta = await this.prisma.propuesta.findUnique({
       where: { id: propuestaId },
-      include: { busqueda: true, proveedor: { include: { local: true } } },
+      include: { busqueda: true, proveedor: true, local: true },
     });
     if (!propuesta) throw new NotFoundException('No existe esa propuesta');
     const { busqueda, proveedor } = propuesta;
     if (busqueda.autor_id !== yo.id) throw new ForbiddenException('Solo quien publicó el «Se busca» elige una propuesta');
     if (busqueda.estado !== 'abierta') throw new ConflictException('Este «Se busca» ya está cerrado');
     if (propuesta.estado !== 'enviada') throw new ConflictException('Esa propuesta ya no está disponible');
-    if (!proveedor.local || !proveedor.local.activo) throw new ConflictException('Ese proveedor ya no tiene su local abierto');
-    const local = proveedor.local;
+    const local: Local | null = propuesta.local ?? (await this.locales.principal(proveedor.id));
+    if (!local || !local.activo) throw new ConflictException('Ese proveedor ya no tiene su local abierto');
+    const contrato = this.pagos.contratoPara(metodo);
+    const monto = formatoUsdc(String(propuesta.monto_usdc));
+    const plan = (propuesta.plan as unknown as PlanFase[] | null) ?? null;
+    if (metodo === 'etapas') {
+      if (!plan?.length) throw new ConflictException('Esta propuesta no trae un plan de fases: elige otro método o pídele que lo agregue');
+      try {
+        this.pagos.validarPlanConMonto(plan, monto);
+      } catch (e) {
+        throw new ConflictException(`El plan de esta propuesta ya no sirve (${(e as Error).message}). Pídele a ${proveedor.nombre} que lo actualice.`);
+      }
+    }
+    const fechaLimite = metodo === 'etapas' ? new Date(plan!.at(-1)!.fecha_limite) : new Date(Date.now() + propuesta.dias_entrega * DIA);
+    const direccionProveedor = await walletParaCobrar(this.prisma, proveedor);
     const rechazadas = await this.prisma.propuesta.findMany({
       where: { busqueda_id: busqueda.id, estado: 'enviada', NOT: { id: propuesta.id } },
       select: { proveedor_id: true },
@@ -234,29 +331,38 @@ export class BusquedasService {
               estado: 'aceptado',
               monto_usdc: propuesta.monto_usdc,
               detalle: busqueda.descripcion,
-              fecha_limite: new Date(Date.now() + propuesta.dias_entrega * DIA),
+              fecha_limite: fechaLimite,
+              direccion_proveedor: direccionProveedor,
+              metodo_pago: metodo,
+              contrato,
+              plan_aceptado_en: metodo === 'etapas' ? new Date() : null,
             },
           });
           // La propuesta es la aceptación del proveedor: queda en el historial como "Aceptar pedido".
           await tx.pasoPedido.create({ data: { pedido_id: nuevo.id, accion: 'aceptar', declarado_por: proveedor.id } });
+          if (metodo === 'etapas') {
+            await tx.fase.createMany({ data: this.pagos.filasDelPlan(nuevo.id, plan!, monto) });
+            await tx.pasoPedido.create({ data: { pedido_id: nuevo.id, accion: 'aceptar_plan', declarado_por: yo.id } });
+          }
           await tx.busqueda.update({ where: { id: busqueda.id }, data: { pedido_id: nuevo.id } });
           await tx.propuesta.update({ where: { id: propuesta.id }, data: { estado: 'aceptada' } });
           await tx.propuesta.updateMany({ where: { busqueda_id: busqueda.id, estado: 'enviada' }, data: { estado: 'rechazada' } });
           await this.recontar(tx, busqueda.id);
           return nuevo;
         });
-        const monto = formatoUsdc(String(propuesta.monto_usdc));
+        // Garantía en el contrato v2: el plan es una sola fase.
+        if (contrato === 'v2' && metodo === 'garantia') await this.pagos.crearFaseUnica(pedido.id);
         await this.avisos.crear(
           proveedor.id,
           'propuesta_aceptada',
-          `${yo.nombre} eligió tu propuesta para «${busqueda.titulo}» por ${monto} USDC. Espera el pago en garantía.`,
+          `${yo.nombre} eligió tu propuesta para «${busqueda.titulo}» por ${monto} USDC. Espera su pago ${COMO_PAGA[metodo]}.`,
           pedido.id,
           busqueda.id,
         );
         await this.avisos.crear(
           yo.id,
           'te_toca_pagar',
-          `Elegiste la propuesta de ${proveedor.nombre} por ${monto} USDC. Paga en garantía desde Stellar Lab para que empiece.`,
+          `Elegiste la propuesta de ${proveedor.nombre} por ${monto} USDC. Paga ${COMO_PAGA[metodo]} para que empiece.`,
           pedido.id,
           busqueda.id,
         );
@@ -302,7 +408,7 @@ export class BusquedasController {
     return serializar(await this.busquedas.cerrar(yo, id));
   }
 
-  /** Mandar o editar la propuesta propia (hace falta tener local). */
+  /** Mandar o editar la propuesta propia (hace falta tener local; si tienes varios, eliges desde cuál). */
   @Post('busquedas/:id/propuestas')
   async proponer(@UsuarioActual() yo: Usuario, @Param('id', ParseUUIDPipe) id: string, @Body() dto: PropuestaDto) {
     return serializar(await this.busquedas.proponer(yo, id, dto));
@@ -314,13 +420,13 @@ export class BusquedasController {
     return serializar(await this.busquedas.retirar(yo, id));
   }
 
-  /** Elegir una propuesta: devuelve el pedido nuevo (ya aceptado, listo para pagar en garantía). */
+  /** Elegir una propuesta y cómo pagar: devuelve el pedido nuevo (ya aceptado, listo para pagar). */
   @Post('propuestas/:id/aceptar')
   @HttpCode(200)
-  async aceptar(@UsuarioActual() yo: Usuario, @Param('id', ParseUUIDPipe) id: string) {
-    return serializar(await this.busquedas.aceptar(yo, id));
+  async aceptar(@UsuarioActual() yo: Usuario, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AceptarPropuestaDto) {
+    return serializar(await this.busquedas.aceptar(yo, id, dto.metodo_pago));
   }
 }
 
-@Module({ controllers: [BusquedasController], providers: [BusquedasService] })
+@Module({ imports: [OrdersModule, LocalesModule, PortafolioModule], controllers: [BusquedasController], providers: [BusquedasService] })
 export class BusquedasModule {}

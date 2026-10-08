@@ -473,7 +473,37 @@ export const JUGADOR_INTERIOR = { x: 240, y: 278 };
 /** Centro de la placa con el nombre del local en la pared del fondo. */
 export const PLACA_INTERIOR = { x: 240, y: 30 };
 
-export function crearInterior(d: DatosCasa, opciones: { tamano?: { ancho: number; alto: number }; titulo?: string } = {}): string {
+/**
+ * Cuadros del portafolio en la pared del fondo (proyectos destacados del dueño): hasta 4, dos a cada lado de la placa.
+ * Cuando hay cuadros, la decoración de la pared se quita para que no se encimen.
+ */
+export const CUADROS_INTERIOR = [
+  { x: 40, y: 20 },
+  { x: 98, y: 20 },
+  { x: 334, y: 20 },
+  { x: 392, y: 20 },
+] as const;
+export const ANCHO_CUADRO = 48;
+export const ALTO_CUADRO = 60;
+/** Hueco del marco donde va la foto del proyecto. */
+export const FOTO_CUADRO = { x: 6, y: 6, ancho: 36, alto: 40 } as const;
+
+/** Marco de madera con su hueco claro y una placa abajo (la foto la pone Phaser encima del hueco). */
+export function crearCuadro(tamano?: { ancho: number; alto: number }): string {
+  const cuerpo =
+    `<g stroke="${TINTA}" stroke-width="2" stroke-linejoin="round">` +
+    `<rect x="1" y="1" width="46" height="58" rx="2" fill="#b07a52"/>` +
+    `<rect x="${FOTO_CUADRO.x}" y="${FOTO_CUADRO.y}" width="${FOTO_CUADRO.ancho}" height="${FOTO_CUADRO.alto}" fill="${CREMA}" stroke-width="1.4"/>` +
+    `<path d="M12 40L20 30L27 37L31 33L37 40Z" fill="#81b29a" stroke-width="1.2"/><circle cx="30" cy="17" r="4" fill="#e9b44c" stroke-width="1.2"/>` +
+    `<rect x="14" y="50" width="20" height="5" rx="1.5" fill="${CREMA}" stroke-width="1.2"/>` +
+    `</g>`;
+  return envolver(`0 0 ${ANCHO_CUADRO} ${ALTO_CUADRO}`, cuerpo, tamano);
+}
+
+export function crearInterior(
+  d: DatosCasa,
+  opciones: { tamano?: { ancho: number; alto: number }; titulo?: string; sinDecoracion?: boolean } = {},
+): string {
   const a = normalizarAparienciaCasa(d.barrio, d.apariencia);
   const cat = CATALOGO_CASA[d.barrio];
   const muro = colorDe(cat.paredInterior, a.paredInterior);
@@ -485,7 +515,7 @@ export function crearInterior(d: DatosCasa, opciones: { tamano?: { ancho: number
     `<rect x="0" y="94" width="480" height="10" fill="${oscurecer(muro, 0.2)}"/>`,
     `<rect x="160" y="16" width="160" height="30" rx="6" fill="${CREMA}" stroke-width="2"/>`,
     `<path d="M168 41H312" stroke="${d.color}" stroke-width="2" opacity=".6"/>`,
-    decoracion(a.decoracion),
+    opciones.sinDecoracion ? '' : decoracion(a.decoracion),
     muebles(a.muebles),
     `<rect x="0" y="0" width="16" height="300" fill="${oscurecer(muro, 0.3)}"/><rect x="464" y="0" width="16" height="300" fill="${oscurecer(muro, 0.3)}"/>`,
     `<rect x="0" y="286" width="208" height="14" fill="${oscurecer(muro, 0.3)}"/><rect x="272" y="286" width="208" height="14" fill="${oscurecer(muro, 0.3)}"/>`,

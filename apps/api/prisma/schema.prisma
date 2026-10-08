@@ -41,6 +41,8 @@ enum EstadoPedido {
   liberado
   reembolsado
   resuelto
+  /// Pedido por fases o pago directo que terminó (todas sus fases cerradas, o el cliente confirmó).
+  finalizado
 }
 
 enum AccionPedido {
@@ -54,6 +56,13 @@ enum AccionPedido {
   resolver
   reembolsar_por_vencimiento
   cobrar_por_vencimiento
+  aceptar_plan
+  pagar_directo
+  confirmar_recibido
+  entregar_fase
+  liberar_fase
+  pedir_cambios
+  resolver_por_vencimiento
 }
 
 enum Parte {
@@ -75,6 +84,15 @@ enum TipoAviso {
   nueva_propuesta
   propuesta_aceptada
   busqueda_cerrada
+  verificacion
+  reporte_resuelto
+  recordatorio
+  plan_propuesto
+  plan_aceptado
+  fase_entregada
+  fase_liberada
+  cambios_pedidos
+  pago_directo
 }
 
 /// Estado de un «Se busca».
@@ -93,40 +111,68 @@ enum EstadoPropuesta {
 }
 
 model Usuario {
-  id        String   @id @db.Uuid
-  direccion String   @unique
-  nombre    String
-  bio       String?
-  avatar    Int      @default(85)
+  id         String   @id @db.Uuid
+  direccion  String   @unique
+  nombre     String
+  bio        String?
+  avatar     Int      @default(85)
   /// Persona en vectores (packages/shared/src/apariencia.ts). Si es null, se dibuja la equivalente a `avatar`.
   apariencia Json?
-  rol       Rol      @default(usuario)
-  creado_en DateTime @default(now()) @db.Timestamptz(3)
+  rol        Rol      @default(usuario)
+  /// KYC aprobado: la insignia ✔ junto al nombre (pública).
+  verificado Boolean  @default(false)
+  /// Suspendida por el equipo después de un reporte: no puede entrar ni escribir.
+  suspendido Boolean  @default(false)
+  creado_en  DateTime @default(now()) @db.Timestamptz(3)
 
-  local            Local?
-  pedidosCliente   Pedido[]     @relation("cliente")
-  pedidosProveedor Pedido[]     @relation("proveedor")
-  pasosDeclarados  PasoPedido[] @relation("declarado")
-  pasosVerificados PasoPedido[] @relation("verificado")
-  mensajes         Mensaje[]
-  disputasAbiertas Disputa[]
-  resenasEscritas  Resena[]     @relation("autor")
-  resenasRecibidas Resena[]     @relation("destinatario")
-  avisos           Aviso[]
-  busquedas        Busqueda[]   @relation("busquedasAutor")
-  propuestas       Propuesta[]  @relation("propuestasProveedor")
+  /// Varios locales por persona (hasta 3 gratis; el principal es el más antiguo).
+  locales                   Local[]
+  pagosPlataforma           PagoPlataforma[]
+  rampas                    Rampa[]
+  experiencias              Experiencia[]
+  proyectos                 Proyecto[]
+  mensajesCercaniaEnviados  MensajeCercania[]      @relation("cercaniaDe")
+  mensajesCercaniaRecibidos MensajeCercania[]      @relation("cercaniaPara")
+  pedidosCliente            Pedido[]               @relation("cliente")
+  pedidosProveedor          Pedido[]               @relation("proveedor")
+  pasosDeclarados           PasoPedido[]           @relation("declarado")
+  pasosVerificados          PasoPedido[]           @relation("verificado")
+  mensajes                  Mensaje[]
+  disputasAbiertas          Disputa[]
+  resenasEscritas           Resena[]               @relation("autor")
+  resenasRecibidas          Resena[]               @relation("destinatario")
+  avisos                    Aviso[]
+  busquedas                 Busqueda[]             @relation("busquedasAutor")
+  propuestas                Propuesta[]            @relation("propuestasProveedor")
+  wallets                   Wallet[]
+  transacciones             TransaccionPreparada[]
+  aceptaciones              AceptacionLegal[]
+  comentarios               Comentario[]
+  verificacion              Verificacion?
+  reportesHechos            Reporte[]              @relation("reportesAutor")
+  reportesRecibidos         Reporte[]              @relation("reportesDenunciado")
+  bloqueos                  Bloqueo[]              @relation("bloqueosDe")
+  bloqueadoPor              Bloqueo[]              @relation("bloqueosA")
+  preferencias              PreferenciasAvisos?
+  suscripciones             SuscripcionPush[]
+  videos                    Video[]
+  pruebas                   Prueba[]
+  fasesDisputadas           Fase[]                 @relation("fasesDisputa")
 
   @@map("usuarios")
 }
 
 /// Desafíos de inicio de sesión (mensaje que se firma con la wallet). Nadie los puede leer desde la web.
 model DesafioLogin {
-  nonce     String   @id
-  direccion String
-  mensaje   String
-  expira_en DateTime @db.Timestamptz(3)
-  usado     Boolean  @default(false)
-  creado_en DateTime @default(now()) @db.Timestamptz(3)
+  nonce      String   @id
+  direccion  String
+  mensaje    String
+  expira_en  DateTime @db.Timestamptz(3)
+  usado      Boolean  @default(false)
+  /// entrar | vincular (sumar una wallet a la cuenta de `usuario_id`).
+  proposito  String   @default("entrar")
+  usuario_id String?  @db.Uuid
+  creado_en  DateTime @default(now()) @db.Timestamptz(3)
 
   @@index([direccion])
   @@map("desafios_login")
@@ -134,7 +180,7 @@ model DesafioLogin {
 
 model Local {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  usuario_id  String   @unique @db.Uuid
+  usuario_id  String   @db.Uuid
   nombre      String
   barrio      Barrio
   /// Número de lote dentro de su villa (1, 2, 3…, sin tope). Define el lugar de la casa en el mapa.
@@ -148,10 +194,14 @@ model Local {
   activo      Boolean  @default(true)
   creado_en   DateTime @default(now()) @db.Timestamptz(3)
 
-  usuario   Usuario    @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
-  servicios Servicio[]
+  usuario    Usuario         @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  servicios  Servicio[]
+  propuestas Propuesta[]
+  /// El pago con que se abrió (solo los locales extra).
+  pago       PagoPlataforma?
 
   @@unique([barrio, lote])
+  @@index([usuario_id])
   @@map("locales")
 }
 
@@ -177,20 +227,31 @@ model Servicio {
 }
 
 model Pedido {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   /// `id` del pedido en el contrato (u64). Lo genera la API.
-  numero         BigInt       @unique
-  servicio_id    String       @db.Uuid
-  cliente_id     String       @db.Uuid
-  proveedor_id   String       @db.Uuid
-  estado         EstadoPedido @default(solicitado)
-  monto_usdc     Decimal      @db.Decimal(20, 7)
-  detalle        String
-  fecha_limite   DateTime?    @db.Timestamptz(3)
+  numero              BigInt       @unique
+  servicio_id         String       @db.Uuid
+  cliente_id          String       @db.Uuid
+  proveedor_id        String       @db.Uuid
+  estado              EstadoPedido @default(solicitado)
+  monto_usdc          Decimal      @db.Decimal(20, 7)
+  detalle             String
+  fecha_limite        DateTime?    @db.Timestamptz(3)
   /// Pedido creado por el seed, sin transacciones reales en Stellar.
-  es_ejemplo     Boolean      @default(false)
-  creado_en      DateTime     @default(now()) @db.Timestamptz(3)
-  actualizado_en DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
+  es_ejemplo          Boolean      @default(false)
+  /// Wallets del pedido en el contrato (con varias wallets por cuenta). Vacías = la wallet de la cuenta.
+  direccion_cliente   String?
+  direccion_proveedor String?
+  /// garantia | directo | etapas (packages/shared/src/pagos.ts).
+  metodo_pago         String       @default("garantia")
+  /// v1 (una entrega) | v2 (fases y pago directo).
+  contrato            String       @default("v1")
+  /// Por etapas: cuándo aceptó el cliente el plan (antes de pagar).
+  plan_aceptado_en    DateTime?    @db.Timestamptz(3)
+  /// Lo que el cliente pidió cambiar del plan.
+  plan_comentario     String?
+  creado_en           DateTime     @default(now()) @db.Timestamptz(3)
+  actualizado_en      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
   servicio  Servicio     @relation(fields: [servicio_id], references: [id])
   cliente   Usuario      @relation("cliente", fields: [cliente_id], references: [id])
@@ -201,6 +262,9 @@ model Pedido {
   resenas   Resena[]
   avisos    Aviso[]
   busqueda  Busqueda?
+  fases     Fase[]
+  pruebas   Prueba[]
+  rampas    Rampa[]
 
   @@index([cliente_id])
   @@index([proveedor_id])
@@ -216,6 +280,11 @@ model PasoPedido {
   declarado_por  String       @db.Uuid
   verificado_por String?      @db.Uuid
   verificado_en  DateTime?    @db.Timestamptz(3)
+  /// La API leyó la transacción en la red y coincide con el pedido.
+  en_cadena      Boolean      @default(false)
+  ledger         Int?
+  /// Fase del pedido (pedidos por fases; 0 = la primera).
+  fase           Int?
   creado_en      DateTime     @default(now()) @db.Timestamptz(3)
 
   pedido      Pedido   @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
@@ -231,6 +300,8 @@ model Mensaje {
   pedido_id String   @db.Uuid
   autor_id  String   @db.Uuid
   texto     String
+  /// Oculto por el equipo después de un reporte (solo lo ve el árbitro).
+  oculto    Boolean  @default(false)
   creado_en DateTime @default(now()) @db.Timestamptz(3)
 
   pedido Pedido  @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
@@ -263,6 +334,8 @@ model Resena {
   destinatario_id String   @db.Uuid
   calificacion    Int
   comentario      String?
+  /// Oculta por el equipo después de un reporte (no cuenta en la reputación).
+  oculta          Boolean  @default(false)
   creado_en       DateTime @default(now()) @db.Timestamptz(3)
 
   pedido       Pedido  @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
@@ -335,13 +408,416 @@ model Propuesta {
   dias_entrega   Int
   mensaje        String
   estado         EstadoPropuesta @default(enviada)
+  /// Local desde el que se propone (si la persona tiene varios).
+  local_id       String?         @db.Uuid
+  /// Plan de fases propuesto (lista de PlanFase, validada con validarPlan). Si es null, se paga de una vez.
+  plan           Json?
+  /// Proyectos del portafolio que se adjuntan (hasta 5).
+  proyectos      String[]        @default([]) @db.Uuid
   creado_en      DateTime        @default(now()) @db.Timestamptz(3)
   actualizado_en DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
 
   busqueda  Busqueda @relation(fields: [busqueda_id], references: [id], onDelete: Cascade)
   proveedor Usuario  @relation("propuestasProveedor", fields: [proveedor_id], references: [id], onDelete: Cascade)
+  local     Local?   @relation(fields: [local_id], references: [id], onDelete: SetNull)
 
   @@unique([busqueda_id, proveedor_id])
   @@index([proveedor_id])
+  @@index([local_id])
   @@map("propuestas")
+}
+
+/// Una wallet de la cuenta (la cuenta es la persona: puede tener varias).
+/// Índices parciales en SQL: una sola "de_la_cuenta" y una sola "para_cobrar" por persona.
+model Wallet {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id   String   @db.Uuid
+  direccion    String   @unique
+  /// wallet | pollar | llave-prueba (CHECK "wallets_metodo_check").
+  metodo       String   @default("wallet")
+  de_la_cuenta Boolean  @default(false)
+  para_cobrar  Boolean  @default(false)
+  agregada_en  DateTime @default(now()) @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id])
+  @@map("wallets")
+}
+
+/// Transacción que armó la API para que la firme la wallet de la persona (nadie la lee desde la web).
+model TransaccionPreparada {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id String    @db.Uuid
+  /// paso_pedido | local_extra | …
+  tipo       String
+  pedido_id  String?   @db.Uuid
+  direccion  String
+  /// Hash de la transacción sin firmas: la firmada tiene que tener el mismo.
+  hash       String    @unique
+  xdr        String
+  datos      Json      @default("{}")
+  creada_en  DateTime  @default(now()) @db.Timestamptz(3)
+  expira_en  DateTime  @db.Timestamptz(3)
+  usada_en   DateTime? @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id])
+  @@map("transacciones_preparadas")
+}
+
+/// Hasta dónde leyó la API los eventos de cada contrato.
+model SincronizacionCadena {
+  clave          String   @id
+  cursor         String?
+  ledger         Int?
+  actualizado_en DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  @@map("sincronizacion_cadena")
+}
+
+/// Aceptación de un documento legal en una versión (packages/shared/src/legal.ts).
+model AceptacionLegal {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id  String   @db.Uuid
+  documento   String
+  version     String
+  aceptado_en DateTime @default(now()) @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@unique([usuario_id, documento, version], map: "aceptaciones_legales_usuario_documento_version_key")
+  @@map("aceptaciones_legales")
+}
+
+/// «Enviar comentarios»: ideas y errores para el equipo.
+model Comentario {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id   String?  @db.Uuid
+  /// idea | error | otro
+  tipo         String
+  texto        String
+  contexto     String?
+  /// Ruta en el bucket privado "capturas".
+  captura_ruta String?
+  /// nuevo | visto | resuelto
+  estado       String   @default("nuevo")
+  creado_en    DateTime @default(now()) @db.Timestamptz(3)
+
+  usuario Usuario? @relation(fields: [usuario_id], references: [id], onDelete: SetNull)
+
+  @@index([estado, creado_en])
+  @@map("comentarios")
+}
+
+/// KYC: una persona = una cuenta. Solo se guarda el estado y una huella (HMAC) del documento, nunca fotos ni el número.
+model Verificacion {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id     String    @unique @db.Uuid
+  proveedor      String    @default("didit")
+  sesion_id      String?   @unique
+  /// pendiente | en_revision | aprobada | rechazada | duplicada
+  estado         String    @default("pendiente")
+  /// HMAC(KYC_HMAC_SECRET, país|tipo|número): detecta cuentas duplicadas. La web no la puede leer.
+  huella         String?   @unique
+  verificada_en  DateTime? @db.Timestamptz(3)
+  creada_en      DateTime  @default(now()) @db.Timestamptz(3)
+  actualizada_en DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("verificaciones")
+}
+
+/// Reporte de contenido o de una persona. Lo revisa el equipo.
+model Reporte {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  autor_id      String    @db.Uuid
+  /// local | foto | busqueda | resena | mensaje | persona | proyecto | chat
+  tipo          String
+  objeto_id     String
+  denunciado_id String?   @db.Uuid
+  /// estafa | ofensivo | spam | ilegal | suplantacion | derechos | otro
+  motivo        String
+  detalle       String?
+  /// abierto | descartado | resuelto
+  estado        String    @default("abierto")
+  resolucion    String?
+  revisado_por  String?   @db.Uuid
+  revisado_en   DateTime? @db.Timestamptz(3)
+  creado_en     DateTime  @default(now()) @db.Timestamptz(3)
+
+  autor      Usuario  @relation("reportesAutor", fields: [autor_id], references: [id], onDelete: Cascade)
+  denunciado Usuario? @relation("reportesDenunciado", fields: [denunciado_id], references: [id], onDelete: SetNull)
+
+  @@unique([autor_id, tipo, objeto_id], map: "reportes_autor_tipo_objeto_key")
+  @@index([estado, creado_en])
+  @@index([denunciado_id])
+  @@map("reportes")
+}
+
+/// `usuario_id` bloqueó a `bloqueado_id`: no le puede hablar ni mandarle pedidos ni propuestas.
+model Bloqueo {
+  usuario_id   String   @db.Uuid
+  bloqueado_id String   @db.Uuid
+  creado_en    DateTime @default(now()) @db.Timestamptz(3)
+
+  usuario   Usuario @relation("bloqueosDe", fields: [usuario_id], references: [id], onDelete: Cascade)
+  bloqueado Usuario @relation("bloqueosA", fields: [bloqueado_id], references: [id], onDelete: Cascade)
+
+  @@id([usuario_id, bloqueado_id])
+  @@index([bloqueado_id])
+  @@map("bloqueos")
+}
+
+/// Avisos fuera de la app: correo (si el servidor tiene Resend) y notificaciones del navegador.
+model PreferenciasAvisos {
+  usuario_id        String   @id @db.Uuid
+  correo            String?
+  correo_verificado Boolean  @default(false)
+  token_correo      String?  @unique
+  por_correo        Boolean  @default(false)
+  por_push          Boolean  @default(true)
+  actualizado_en    DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("preferencias_avisos")
+}
+
+/// Suscripción a notificaciones del navegador (Web Push) de un dispositivo.
+model SuscripcionPush {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id String   @db.Uuid
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  creada_en  DateTime @default(now()) @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id])
+  @@map("suscripciones_push")
+}
+
+/// Recordatorios ya enviados (para no repetir "vence mañana").
+model Recordatorio {
+  clave      String   @id
+  enviado_en DateTime @default(now()) @db.Timestamptz(3)
+
+  @@map("recordatorios")
+}
+
+/// Una fase de un pedido del contrato v2 (la garantía simple es un plan de 1 fase).
+/// Antes de pagar está "propuesta"; después refleja el contrato. Su disputa vive en la misma fila.
+model Fase {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pedido_id           String    @db.Uuid
+  /// 0 = la primera (igual que en el contrato).
+  numero              Int
+  descripcion         String
+  porcentaje_proyecto Int
+  porcentaje_pago     Int
+  monto_usdc          Decimal   @db.Decimal(20, 7)
+  fecha_limite        DateTime  @db.Timestamptz(3)
+  /// Pruebas pactadas: archivo | enlace | video (vacío = cualquiera).
+  pruebas             String[]  @default([])
+  /// propuesta | en_curso | entregada | liberada | reembolsada | en_disputa | resuelta
+  estado              String    @default("propuesta")
+  entregada_en        DateTime? @db.Timestamptz(3)
+  /// SHA-256 del paquete de pruebas que quedó en el contrato al entregar.
+  huella              String?
+  cambios             Int       @default(0)
+  disputa_desde       DateTime? @db.Timestamptz(3)
+  abierta_por         String?   @db.Uuid
+  motivo_disputa      String?
+  decision            String?
+  /// Cliente | Proveedor | Mitad
+  ganador             String?
+  actualizado_en      DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  pedido Pedido   @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  autor  Usuario? @relation("fasesDisputa", fields: [abierta_por], references: [id], onDelete: SetNull)
+
+  @@unique([pedido_id, numero])
+  @@map("fases")
+}
+
+/// Video en Mux (pruebas de las fases o portafolio). Supabase solo guarda los ids.
+model Video {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id    String   @db.Uuid
+  /// prueba | portafolio
+  uso           String
+  mux_upload_id String   @unique
+  mux_asset_id  String?  @unique
+  playback_id   String?
+  /// signed (privado: se ve con un token) | public
+  politica      String
+  /// subiendo | procesando | listo | error
+  estado        String   @default("subiendo")
+  duracion_seg  Float?
+  creado_en     DateTime @default(now()) @db.Timestamptz(3)
+
+  usuario Usuario  @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  pruebas Prueba[]
+
+  @@index([usuario_id])
+  @@map("videos")
+}
+
+/// Prueba de una fase (lo que se entrega) o de una disputa. Al entregar la fase queda sellada.
+model Prueba {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  pedido_id  String    @db.Uuid
+  fase       Int
+  autor_id   String    @db.Uuid
+  /// entrega | disputa
+  para       String    @default("entrega")
+  /// archivo | enlace | video
+  tipo       String
+  titulo     String
+  url        String?
+  /// Ruta en el bucket privado "pruebas".
+  ruta       String?
+  video_id   String?   @db.Uuid
+  mime       String?
+  tamano     Int?
+  /// SHA-256 de la prueba (del archivo, del enlace o del id del video).
+  huella     String
+  /// Número de entrega de la fase (sube cuando el cliente pide cambios).
+  entrega    Int       @default(1)
+  sellada_en DateTime? @db.Timestamptz(3)
+  creada_en  DateTime  @default(now()) @db.Timestamptz(3)
+
+  pedido Pedido  @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+  autor  Usuario @relation(fields: [autor_id], references: [id], onDelete: Cascade)
+  video  Video?  @relation(fields: [video_id], references: [id], onDelete: SetNull)
+
+  @@index([pedido_id, fase])
+  @@map("pruebas")
+}
+
+/// Pago a la plataforma (por ahora, el local extra): USDC a la tesorería, una transacción por pago.
+model PagoPlataforma {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id String   @db.Uuid
+  /// local_extra
+  concepto   String
+  monto_usdc Decimal  @db.Decimal(20, 7)
+  tx_hash    String   @unique
+  red        String
+  /// Wallet que pagó.
+  direccion  String
+  /// true si la API leyó la transacción en la red.
+  verificado Boolean  @default(false)
+  /// Local que se abrió con este pago (null mientras no se use).
+  local_id   String?  @unique @db.Uuid
+  creado_en  DateTime @default(now()) @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  local   Local?  @relation(fields: [local_id], references: [id], onDelete: SetNull)
+
+  @@index([usuario_id])
+  @@map("pagos_plataforma")
+}
+
+/// Portafolio: experiencia previa (puesto, lugar, fechas y descripción).
+model Experiencia {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id  String    @db.Uuid
+  puesto      String
+  lugar       String
+  desde       DateTime  @db.Date
+  hasta       DateTime? @db.Date
+  descripcion String?
+  orden       Int       @default(0)
+  creado_en   DateTime  @default(now()) @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id])
+  @@map("experiencias")
+}
+
+/// Portafolio: un proyecto con fotos (bucket "fotos"), enlaces https y videos (Mux, YouTube o Vimeo).
+model Proyecto {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id     String    @db.Uuid
+  titulo         String
+  descripcion    String
+  fecha          DateTime? @db.Date
+  fotos          String[]  @default([])
+  /// [{ url, titulo }]
+  enlaces        Json      @default("[]")
+  /// [{ tipo: "mux", video_id, playback_id } | { tipo: "youtube" | "vimeo", id, url }]
+  videos         Json      @default("[]")
+  /// Se cuelga como cuadro en la pared del interior de sus locales.
+  destacado      Boolean   @default(false)
+  /// Lo ocultó el equipo después de un reporte.
+  oculto         Boolean   @default(false)
+  orden          Int       @default(0)
+  creado_en      DateTime  @default(now()) @db.Timestamptz(3)
+  actualizado_en DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@index([usuario_id])
+  @@map("proyectos")
+}
+
+/// Chat por cercanía: se guarda 7 días (solo para revisar reportes) y después se borra solo.
+model MensajeCercania {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  de_id     String   @db.Uuid
+  para_id   String   @db.Uuid
+  texto     String
+  oculto    Boolean  @default(false)
+  creado_en DateTime @default(now()) @db.Timestamptz(3)
+
+  de   Usuario @relation("cercaniaDe", fields: [de_id], references: [id], onDelete: Cascade)
+  para Usuario @relation("cercaniaPara", fields: [para_id], references: [id], onDelete: Cascade)
+
+  @@index([de_id, para_id, creado_en])
+  @@index([para_id, creado_en])
+  @@index([creado_en])
+  @@map("mensajes_cercania")
+}
+
+/// Recarga (bolivianos → USDC con el QR del banco) o retiro (USDC → cuenta del banco) con una rampa.
+/// Cryptoville no toca el dinero: lo cambia la rampa. En testnet la rampa es simulada (docs/simulaciones.md).
+model Rampa {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id     String   @db.Uuid
+  /// entrada | salida
+  sentido        String
+  /// simulada | pollar
+  proveedor      String
+  pais           String
+  moneda         String
+  monto_usdc     Decimal  @db.Decimal(20, 7)
+  monto_local    Decimal  @db.Decimal(20, 2)
+  tipo_cambio    Decimal  @db.Decimal(20, 6)
+  comision_local Decimal  @default(0) @db.Decimal(20, 2)
+  direccion      String
+  pedido_id      String?  @db.Uuid
+  /// esperando_pago | acreditada | esperando_envio | enviada | vencida | fallida
+  estado         String
+  referencia     String   @unique
+  qr_payload     String?
+  banco          String?
+  /// Solo los últimos 4 dígitos de la cuenta.
+  cuenta_final   String?
+  tx_hash        String?  @unique
+  expira_en      DateTime @db.Timestamptz(3)
+  creada_en      DateTime @default(now()) @db.Timestamptz(3)
+  actualizada_en DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  pedido  Pedido? @relation(fields: [pedido_id], references: [id], onDelete: SetNull)
+
+  @@index([usuario_id])
+  @@index([pedido_id])
+  @@map("rampas")
 }

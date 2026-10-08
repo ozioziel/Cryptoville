@@ -4,6 +4,7 @@
 // - Los proveedores con local le mandan propuestas (precio, días de entrega y un mensaje).
 // - Cuando quien publicó elige una propuesta, nace un pedido normal ya aceptado:
 //   desde ahí sigue el mismo camino de siempre (pago en garantía en Stellar Lab, entrega, disputas, reseñas).
+import type { PlanFase } from './pagos.js';
 import type { Barrio } from './types/index.js';
 
 export type EstadoBusqueda = 'abierta' | 'asignada' | 'cancelada';
@@ -40,6 +41,12 @@ export interface Propuesta {
   dias_entrega: number;
   mensaje: string;
   estado: EstadoPropuesta;
+  /** Local desde el que se propone (v2: una persona puede tener varios). */
+  local_id: string | null;
+  /** Plan de fases propuesto (si quien publicó elige pagar por etapas, se usa tal cual). */
+  plan: PlanFase[] | null;
+  /** Proyectos del portafolio que se adjuntan (ids). */
+  proyectos: string[];
   creado_en: string;
   actualizado_en: string;
 }

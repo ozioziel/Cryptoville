@@ -15,6 +15,10 @@ export const SOLO_ARBITRO = 'solo_arbitro';
 /** Marca un endpoint como exclusivo del árbitro. */
 export const SoloArbitro = () => SetMetadata(SOLO_ARBITRO, true);
 
+export const PERMITIR_SUSPENDIDO = 'permitir_suspendido';
+/** Endpoints que una cuenta suspendida sí puede usar (ver su perfil, escribirle al equipo). */
+export const PermitirSuspendido = () => SetMetadata(PERMITIR_SUSPENDIDO, true);
+
 /**
  * Exige una sesión de Supabase válida (Authorization: Bearer <access_token>).
  * La sesión la emite Supabase Auth cuando la API verifica la firma de la wallet.
@@ -37,6 +41,11 @@ export class SesionGuard implements CanActivate {
 
     const usuario = await this.prisma.usuario.findUnique({ where: { id: data.user.id } });
     if (!usuario) throw new UnauthorizedException('Tu cuenta no existe en Cryptoville');
+
+    const permitirSuspendido = this.reflector.getAllAndOverride<boolean>(PERMITIR_SUSPENDIDO, [ctx.getHandler(), ctx.getClass()]);
+    if (usuario.suspendido && !permitirSuspendido) {
+      throw new ForbiddenException('Tu cuenta está suspendida por un reporte. Escríbenos desde «Enviar comentarios».');
+    }
 
     const soloArbitro = this.reflector.getAllAndOverride<boolean>(SOLO_ARBITRO, [ctx.getHandler(), ctx.getClass()]);
     if (soloArbitro && usuario.rol !== 'arbitro') throw new ForbiddenException('Solo el árbitro puede hacer esto');

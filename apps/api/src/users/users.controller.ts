@@ -1,10 +1,11 @@
 import { BadRequestException, Body, Controller, Get, Module, Patch, UseGuards } from '@nestjs/common';
 import { IsIn, IsObject, IsOptional, IsString, Length, ValidateIf } from 'class-validator';
 import { AVATARES, validarAparienciaPersona } from '@cryptoville/shared';
-import { SesionGuard } from '../common/sesion.guard';
+import { PermitirSuspendido, SesionGuard } from '../common/sesion.guard';
 import { serializar } from '../common/serializar';
 import { UsuarioActual } from '../common/usuario-actual';
 import { Prisma, type Usuario } from '../generated/prisma/client';
+import { LocalesModule, LocalesService } from '../locales/locales.module';
 import { PrismaService } from '../prisma/prisma.service';
 
 class PerfilDto {
@@ -32,12 +33,17 @@ class PerfilDto {
 @Controller('yo')
 @UseGuards(SesionGuard)
 export class UsersController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly locales: LocalesService,
+  ) {}
 
+  /** La cuenta, su local principal (el más antiguo; como antes de v2) y todos sus locales. */
   @Get()
+  @PermitirSuspendido()
   async yo(@UsuarioActual() yo: Usuario) {
-    const local = await this.prisma.local.findUnique({ where: { usuario_id: yo.id } });
-    return serializar({ usuario: yo, local });
+    const locales = await this.locales.propios(yo.id);
+    return serializar({ usuario: yo, local: locales[0] ?? null, locales });
   }
 
   @Patch()
@@ -62,5 +68,5 @@ export class UsersController {
   }
 }
 
-@Module({ controllers: [UsersController] })
+@Module({ imports: [LocalesModule], controllers: [UsersController] })
 export class UsersModule {}

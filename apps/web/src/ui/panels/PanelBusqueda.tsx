@@ -4,18 +4,30 @@ import {
   aceptaPropuestas,
   diasHasta,
   type EstadoPropuesta,
+  type MetodoPago,
+  type PlanFase,
   type Reputacion,
 } from '@cryptoville/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { useSesion } from '../../features/auth/sesion';
 import { cargarBusqueda, type BusquedaDetalle, type PropuestaDetalle } from '../../features/busquedas/datos';
 import { cargarReputaciones } from '../../features/services/datos';
+import { cargarPortafolio, cargarProyectos } from '../../features/portafolio/datos';
+import { TarjetaProyecto } from './PanelPortafolio';
+import type { Proyecto } from '@cryptoville/shared';
 import { emitir } from '../../game/EventBus';
 import { api, mensajeDeError } from '../../lib/api';
+import { obtenerConfig } from '../../lib/config';
+import { EditorPlan, planInicial } from '../pagos/EditorPlan';
+import { MetodosDePago } from '../pagos/MetodosDePago';
 import { useEstado } from '../estado';
 import { Aviso, Avatar, Cargando, Estrellas, Garantia, fechaCorta } from '../components/basicos';
 import { CartelSeBusca } from '../components/Cartel';
 import { Icono } from '../components/Iconos';
+import { BotonBloquear, BotonReportar, Nombre } from '../components/Confianza';
+
+/** «Luego pagas en garantía», «luego pagas por etapas»… */
+const COMO_PAGA: Record<MetodoPago, string> = { directo: 'directo', garantia: 'en garantía', etapas: 'por etapas' };
 
 const CLASE_PROPUESTA: Record<EstadoPropuesta, string> = {
   enviada: 'info',
@@ -26,7 +38,7 @@ const CLASE_PROPUESTA: Record<EstadoPropuesta, string> = {
 
 /** Un «Se busca»: lo que necesita la persona y, según quién mira, las propuestas o el formulario para proponer. */
 export function PanelBusqueda({ id }: { id: string }) {
-  const { usuario, local: miLocal } = useSesion();
+  const { usuario, locales: misLocales } = useSesion();
   const { abrir, cambiar, version, refrescar, notificar } = useEstado();
   const [b, setB] = useState<BusquedaDetalle | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -62,8 +74,14 @@ export function PanelBusqueda({ id }: { id: string }) {
         <h3>Lo que necesita</h3>
         <p className="texto-largo">{b.descripcion}</p>
         <p className="tenue pequeno">
-          Villa {BARRIOS[b.barrio].nombre} · publicado el {fechaCorta(b.creado_en)}
+          Villa {BARRIOS[b.barrio].nombre} · publicado el {fechaCorta(b.creado_en)} por <Nombre nombre={b.autor.nombre} verificado={b.autor.verificado} />
         </p>
+        {!esAutor && (
+          <div className="fila">
+            <BotonReportar tipo="busqueda" objetoId={b.id} nombre={'«' + b.titulo + '»'} />
+            <BotonBloquear usuarioId={b.autor_id} nombre={b.autor.nombre} />
+          </div>
+        )}
       </section>
 
       {b.pedido_id && (esAutor || mia?.estado === 'aceptada') && (
@@ -85,7 +103,7 @@ export function PanelBusqueda({ id }: { id: string }) {
         />
       ) : !usuario ? (
         <>
-          <p className="tenue">Entra con tu wallet para mandar una propuesta.</p>
+          <p className="tenue">Entra para mandar una propuesta.</p>
           <button type="button" className="boton boton-primario" onClick={() => abrir({ tipo: 'bienvenida' })}>
             Entrar
           </button>
@@ -94,10 +112,17 @@ export function PanelBusqueda({ id }: { id: string }) {
         <MiPropuesta busquedaId={b.id} propuesta={mia} abierta={abierta} onListo={listo} />
       ) : !abierta ? (
         <p className="tenue">Este «Se busca» ya no recibe propuestas.</p>
-      ) : miLocal ? (
+      ) : misLocales.some((l) => l.activo) ? (
         <FormularioPropuesta
           busquedaId={b.id}
-          inicial={{ monto: mia?.monto_usdc ?? b.presupuesto_usdc, dias: mia?.dias_entrega ?? diasHasta(b.fecha_limite), mensaje: mia?.mensaje ?? '' }}
+          inicial={{
+            monto: mia?.monto_usdc ?? b.presupuesto_usdc,
+            dias: mia?.dias_entrega ?? diasHasta(b.fecha_limite),
+            mensaje: mia?.mensaje ?? '',
+            localId: mia?.local_id ?? null,
+            plan: mia?.plan ?? null,
+            proyectos: mia?.proyectos ?? [],
+          }}
           textoBoton={mia ? 'Volver a mandar mi propuesta' : 'Mandar propuesta'}
           onListo={() => listo('Propuesta enviada')}
         />
@@ -138,11 +163,13 @@ function PropuestasRecibidas({
     if (ids) void cargarReputaciones(ids.split(',')).then(setReputaciones);
   }, [ids]);
 
+  const [metodo, setMetodo] = useState<MetodoPago>('garantia');
+
   const elegir = async (p: PropuestaDetalle) => {
     setError(null);
     setOcupado(true);
     try {
-      const r = await api<{ pedido: { id: string } }>(`/propuestas/${p.id}/aceptar`, { cuerpo: {} });
+      const r = await api<{ pedido: { id: string } }>(`/propuestas/${p.id}/aceptar`, { cuerpo: { metodo_pago: metodo } });
       onElegida(r.pedido.id);
     } catch (e) {
       setError(mensajeDeError(e));
@@ -160,14 +187,14 @@ function PropuestasRecibidas({
       <ul className="lista-tarjetas">
         {visibles.map((p) => {
           const rep = reputaciones.get(p.proveedor_id);
-          const local = p.proveedor.local;
+          const local = p.local;
           return (
             <li key={p.id} className="tarjeta propuesta">
               <span className="fila espaciada">
                 <span className="fila">
                   <Avatar frame={p.proveedor.avatar} apariencia={p.proveedor.apariencia} tamano={36} titulo={p.proveedor.nombre} />
                   <span className="pila-compacta">
-                    <strong>{p.proveedor.nombre}</strong>
+                    <Nombre nombre={p.proveedor.nombre} verificado={p.proveedor.verificado} fuerte />
                     <span className="tenue pequeno">{local ? `${local.nombre} · Villa ${BARRIOS[local.barrio].nombre}` : 'Sin local'}</span>
                   </span>
                 </span>
@@ -182,6 +209,15 @@ function PropuestasRecibidas({
                 <span className="tenue pequeno">Entrega en {p.dias_entrega} {p.dias_entrega === 1 ? 'día' : 'días'}</span>
               </span>
               <p className="texto-largo">{p.mensaje}</p>
+              {p.plan && p.plan.length > 0 && (
+                <details>
+                  <summary className="pequeno">
+                    Trae un plan de {p.plan.length} {p.plan.length === 1 ? 'fase' : 'fases'}
+                  </summary>
+                  <EditorPlan plan={p.plan} monto={p.monto_usdc} />
+                </details>
+              )}
+              {p.proyectos?.length > 0 && <ProyectosAdjuntos ids={p.proyectos} />}
               <span className="fila">
                 {local?.activo && (
                   <button
@@ -196,7 +232,14 @@ function PropuestasRecibidas({
                   </button>
                 )}
                 {abierta && p.estado === 'enviada' && confirmando !== p.id && (
-                  <button type="button" className="boton boton-mini boton-elegir" onClick={() => setConfirmando(p.id)}>
+                  <button
+                    type="button"
+                    className="boton boton-mini boton-elegir"
+                    onClick={() => {
+                      setMetodo(p.plan?.length && obtenerConfig().contrato_v2_id ? 'etapas' : 'garantia');
+                      setConfirmando(p.id);
+                    }}
+                  >
                     Elegir esta propuesta
                   </button>
                 )}
@@ -204,9 +247,17 @@ function PropuestasRecibidas({
               {confirmando === p.id && (
                 <div className="caja caja-exito pila">
                   <span className="pequeno">
-                    ¿Elegir a <b>{p.proveedor.nombre}</b> por <b>{p.monto_usdc} USDC</b>? Se crea el pedido y luego pagas en garantía desde Stellar Lab.
-                    Las demás propuestas quedan sin elegir.
+                    ¿Elegir a <b>{p.proveedor.nombre}</b> por <b>{p.monto_usdc} USDC</b>? Se crea el pedido y luego pagas {COMO_PAGA[metodo]}. Las demás
+                    propuestas quedan sin elegir.
                   </span>
+                  <span className="etiqueta">¿Cómo quieres pagar?</span>
+                  <MetodosDePago
+                    valor={metodo}
+                    onCambiar={setMetodo}
+                    reputacion={rep ?? null}
+                    noDisponibles={p.plan?.length ? undefined : { etapas: 'Para pagar por etapas, la propuesta tiene que traer un plan de fases.' }}
+                  />
+                  {metodo === 'etapas' && <span className="tenue pequeno">Al elegirla aceptas su plan de fases tal como está arriba.</span>}
                   <span className="fila">
                     <button type="button" className="boton boton-primario" disabled={ocupado} onClick={() => elegir(p)}>
                       {ocupado ? 'Creando el pedido…' : 'Sí, elegir'}
@@ -278,7 +329,7 @@ function MiPropuesta({
     return (
       <FormularioPropuesta
         busquedaId={busquedaId}
-        inicial={{ monto: p.monto_usdc, dias: p.dias_entrega, mensaje: p.mensaje }}
+        inicial={{ monto: p.monto_usdc, dias: p.dias_entrega, mensaje: p.mensaje, localId: p.local_id, plan: p.plan, proyectos: p.proyectos ?? [] }}
         textoBoton="Guardar cambios"
         onListo={() => {
           setEditando(false);
@@ -296,10 +347,19 @@ function MiPropuesta({
           <span className="precio">{p.monto_usdc} USDC</span>
           <span className={`badge badge-${CLASE_PROPUESTA[p.estado]}`}>{ETIQUETA_ESTADO_PROPUESTA[p.estado]}</span>
         </span>
-        <span className="tenue pequeno">Entrega en {p.dias_entrega} {p.dias_entrega === 1 ? 'día' : 'días'}</span>
+        <span className="tenue pequeno">
+          Entrega en {p.dias_entrega} {p.dias_entrega === 1 ? 'día' : 'días'}
+          {p.local && ` · desde ${p.local.nombre}`}
+        </span>
         <p className="texto-largo">{p.mensaje}</p>
+        {p.plan && p.plan.length > 0 && (
+          <details>
+            <summary className="pequeno">Tu plan de {p.plan.length} {p.plan.length === 1 ? 'fase' : 'fases'}</summary>
+            <EditorPlan plan={p.plan} monto={p.monto_usdc} />
+          </details>
+        )}
       </div>
-      {p.estado === 'aceptada' && <Aviso tipo="exito">¡Te eligieron! Cuando paguen en garantía, te avisamos para que empieces.</Aviso>}
+      {p.estado === 'aceptada' && <Aviso tipo="exito">¡Te eligieron! Cuando paguen, te avisamos para que empieces.</Aviso>}
       {p.estado === 'rechazada' && <p className="tenue pequeno">Esta vez eligieron otra propuesta o cerraron el «Se busca».</p>}
       {abierta && p.estado === 'enviada' && (
         <span className="fila">
@@ -336,14 +396,26 @@ function FormularioPropuesta({
   onCancelar,
 }: {
   busquedaId: string;
-  inicial: { monto: string; dias: number; mensaje: string };
+  inicial: { monto: string; dias: number; mensaje: string; localId: string | null; plan: PlanFase[] | null; proyectos: string[] };
   textoBoton: string;
   onListo: () => void;
   onCancelar?: () => void;
 }) {
+  const { locales: misLocales } = useSesion();
+  const abiertos = misLocales.filter((l) => l.activo);
   const [monto, setMonto] = useState(inicial.monto);
   const [dias, setDias] = useState(inicial.dias);
   const [mensaje, setMensaje] = useState(inicial.mensaje);
+  const [localId, setLocalId] = useState(inicial.localId && abiertos.some((l) => l.id === inicial.localId) ? inicial.localId : (abiertos[0]?.id ?? ''));
+  // El plan por fases solo existe con el contrato v2 (si no, se paga de una vez).
+  const conFases = Boolean(obtenerConfig().contrato_v2_id);
+  const [plan, setPlan] = useState<PlanFase[] | null>(conFases ? inicial.plan : null);
+  const { usuario } = useSesion();
+  const [misProyectos, setMisProyectos] = useState<Proyecto[]>([]);
+  const [adjuntos, setAdjuntos] = useState<string[]>(inicial.proyectos);
+  useEffect(() => {
+    if (usuario) void cargarPortafolio(usuario.id).then((x) => setMisProyectos(x.proyectos), () => undefined);
+  }, [usuario]);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -351,7 +423,16 @@ function FormularioPropuesta({
     setError(null);
     setEnviando(true);
     try {
-      await api(`/busquedas/${busquedaId}/propuestas`, { cuerpo: { monto_usdc: monto.trim(), dias_entrega: Number(dias), mensaje } });
+      await api(`/busquedas/${busquedaId}/propuestas`, {
+        cuerpo: {
+          monto_usdc: monto.trim(),
+          dias_entrega: Number(dias),
+          mensaje,
+          local_id: localId || undefined,
+          proyectos: adjuntos.filter((id) => misProyectos.some((x) => x.id === id)),
+          ...(plan ? { fases: plan } : {}),
+        },
+      });
       onListo();
     } catch (e) {
       setError(mensajeDeError(e));
@@ -368,11 +449,56 @@ function FormularioPropuesta({
           Precio (USDC)
           <input className="campo" inputMode="decimal" value={monto} onChange={(e) => setMonto(e.target.value)} />
         </label>
-        <label className="etiqueta">
-          Días de entrega
-          <input className="campo" type="number" min={1} max={90} value={dias} onChange={(e) => setDias(Number(e.target.value))} />
-        </label>
+        {!plan && (
+          <label className="etiqueta">
+            Días de entrega
+            <input className="campo" type="number" min={1} max={90} value={dias} onChange={(e) => setDias(Number(e.target.value))} />
+          </label>
+        )}
       </div>
+      {abiertos.length > 1 && (
+        <label className="etiqueta">
+          Desde qué local
+          <select className="campo" value={localId} onChange={(e) => setLocalId(e.target.value)}>
+            {abiertos.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.nombre} · Villa {BARRIOS[l.barrio].nombre}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {conFases && (
+        <label className="fila pequeno">
+          <input type="checkbox" checked={Boolean(plan)} onChange={(e) => setPlan(e.target.checked ? (inicial.plan ?? planInicial(Number(dias) || 7)) : null)} />
+          Proponer un plan por fases (así te pueden pagar por etapas)
+        </label>
+      )}
+      {plan && (
+        <>
+          <EditorPlan plan={plan} monto={monto} onCambiar={setPlan} />
+          <span className="tenue pequeno">El plazo de la propuesta es hasta la fecha de la última fase.</span>
+        </>
+      )}
+      {misProyectos.length > 0 && (
+        <fieldset className="adjuntar-proyectos">
+          <legend className="etiqueta">Adjuntar proyectos de tu portafolio (hasta 5)</legend>
+          {misProyectos.map((x) => {
+            const elegido = adjuntos.includes(x.id);
+            return (
+              <label key={x.id} className="fila pequeno">
+                <input
+                  type="checkbox"
+                  checked={elegido}
+                  disabled={!elegido && adjuntos.length >= 5}
+                  onChange={(e) => setAdjuntos((a) => (e.target.checked ? [...a, x.id] : a.filter((id) => id !== x.id)))}
+                />
+                {x.titulo}
+              </label>
+            );
+          })}
+        </fieldset>
+      )}
       <label className="etiqueta">
         Cuéntale cómo lo harías
         <textarea
@@ -397,5 +523,26 @@ function FormularioPropuesta({
       <span className="tenue pequeno">Todavía no se cobra nada: si te eligen, se crea el pedido y el cliente paga en garantía.</span>
       {error && <Aviso tipo="peligro">{error}</Aviso>}
     </section>
+  );
+}
+
+/** Proyectos del portafolio que trae una propuesta (los que ya no se ven no aparecen). */
+function ProyectosAdjuntos({ ids }: { ids: string[] }) {
+  const { abrir } = useEstado();
+  const [proyectos, setProyectos] = useState<Proyecto[]>([]);
+  const clave = ids.join(',');
+  useEffect(() => {
+    void cargarProyectos(clave.split(',')).then(setProyectos);
+  }, [clave]);
+  if (!proyectos.length) return null;
+  return (
+    <div className="pila-compacta">
+      <span className="tenue pequeno">Proyectos que adjuntó</span>
+      <div className="grilla-proyectos">
+        {proyectos.map((p) => (
+          <TarjetaProyecto key={p.id} proyecto={p} onAbrir={() => abrir({ tipo: 'proyecto', id: p.id })} />
+        ))}
+      </div>
+    </div>
   );
 }

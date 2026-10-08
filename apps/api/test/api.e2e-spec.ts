@@ -1,6 +1,9 @@
 // Pruebas de punta a punta de la API contra Supabase local (`npm run setup` antes).
 // Crean wallets nuevas en cada corrida y las borran al terminar.
 process.env.LOG_LEVEL = 'silent';
+import './sin-servicios';
+// Esta suite prueba el escrow v1: sin contrato v2, como antes de v2 (las del v2 están en v2-*.e2e-spec.ts).
+process.env.ESCROW_V2_CONTRACT_ID = '';
 
 import {
   APARIENCIA_POR_AVATAR,

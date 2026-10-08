@@ -17,7 +17,7 @@ export interface PedidoDetalle extends PedidoResumen {
   resenas: Resena[];
 }
 
-const CAMPOS_USUARIO = 'id, nombre, avatar, apariencia, direccion, bio, rol';
+const CAMPOS_USUARIO = 'id, nombre, avatar, apariencia, direccion, bio, rol, verificado';
 const SELECT_RESUMEN =
   `*, servicio:servicios(titulo, busqueda_id), cliente:usuarios!pedidos_cliente_id_fkey(${CAMPOS_USUARIO}), ` +
   `proveedor:usuarios!pedidos_proveedor_id_fkey(${CAMPOS_USUARIO})`;
@@ -66,4 +66,31 @@ export async function cargarDisputas(): Promise<DisputaArbitro[]> {
     .limit(100);
   if (error) throw new Error('No se pudieron cargar las disputas');
   return ((data ?? []) as unknown as DisputaArbitro[]).map((d) => ({ ...d, pedido: normalizar(d.pedido) }));
+}
+
+/** Disputa de una fase del contrato v2 (vive en la fila de la fase, no en `disputas`). */
+export interface DisputaFaseArbitro {
+  id: string;
+  pedido_id: string;
+  /** 0 = la primera, como en el contrato. */
+  numero: number;
+  descripcion: string;
+  monto_usdc: string;
+  estado: string;
+  motivo_disputa: string | null;
+  disputa_desde: string;
+  ganador: string | null;
+  pedido: PedidoResumen;
+}
+
+/** Para el panel del árbitro: las fases del v2 que alguna vez entraron en disputa (RLS deja verlas al árbitro). */
+export async function cargarDisputasFases(): Promise<DisputaFaseArbitro[]> {
+  const { data, error } = await supabase()
+    .from('fases')
+    .select(`id, pedido_id, numero, descripcion, monto_usdc, estado, motivo_disputa, disputa_desde, ganador, pedido:pedidos(${SELECT_RESUMEN})`)
+    .not('disputa_desde', 'is', null)
+    .order('disputa_desde', { ascending: false })
+    .limit(100);
+  if (error) throw new Error('No se pudieron cargar las disputas de las fases');
+  return ((data ?? []) as unknown as DisputaFaseArbitro[]).map((f) => ({ ...f, monto_usdc: formatoUsdc(f.monto_usdc), pedido: normalizar(f.pedido) }));
 }

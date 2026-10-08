@@ -11,9 +11,12 @@ import { leerConfiguracion } from './config/configuracion';
 
 export async function crearApp() {
   const config = leerConfiguracion();
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  // rawBody: los webhooks (Didit, Mux) se verifican con la firma del cuerpo tal como llegó.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, rawBody: true });
   app.useLogger(app.get(Logger));
-  app.set('trust proxy', 1); // detrás de Caddy: la IP real llega en X-Forwarded-For
+  // Detrás de Caddy (y, en un VPS compartido, también del proxy del dueño): la IP real llega en X-Forwarded-For.
+  // Se confía solo en los saltos de redes privadas (Docker, localhost); los de internet no pueden falsificarla.
+  app.set('trust proxy', 'loopback, linklocal, uniquelocal');
   app.setGlobalPrefix('api');
   app.use(helmet());
   app.useBodyParser('json', { limit: '64kb' });

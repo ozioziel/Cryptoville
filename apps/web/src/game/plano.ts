@@ -25,6 +25,11 @@ const CALLE_DESDE = 170;
 /** Columnas libres de la primera fila (al centro están el edificio y la estatua). */
 const COLUMNAS_ENTRADA = [0, 1, 5, 6] as const;
 export const MIN_FILAS = 2;
+/**
+ * Filas de un sector completo: la entrada (4 lotes) más 8 calles de 7 = 60 casas
+ * (`villa.casasPorSector` en packages/shared/src/reglas.ts). Después se abre «Creativo B».
+ */
+export const FILAS_POR_SECTOR = 9;
 
 export interface Punto {
   x: number;

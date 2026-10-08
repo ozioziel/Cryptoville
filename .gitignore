@@ -15,6 +15,7 @@ contracts/target/
 .env.*
 !.env.example
 !.env.local.example
+!.env.mainnet.example
 
 # Llaves de los usuarios de ejemplo (solo testnet, pero igual privadas)
 .seed-keys.json
@@ -42,3 +43,7 @@ Thumbs.db
 contracts/**/test_snapshots/
 .claude/launch.json
 docs/propuestas/
+
+# Datos de prueba (npm run datos:prueba): llaves de testnet y ids de los pedidos de prueba
+.prueba-keys.json
+.prueba-datos.json

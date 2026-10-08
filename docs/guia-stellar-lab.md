@@ -1,6 +1,8 @@
 # Guía de Stellar Lab: contratos, dinero de prueba y pagos
 
-Todo lo que toca la red de Stellar se hace en **[Stellar Lab](https://lab.stellar.org)**, en **testnet**. La app de Cryptoville no se conecta a Stellar: solo arma los enlaces al Lab y guarda los hashes de las transacciones.
+Todo lo que toca la red de Stellar se puede hacer en **[Stellar Lab](https://lab.stellar.org)**, en **testnet**. Con el contrato v1 la app solo arma los enlaces al Lab y guarda los hashes de las transacciones.
+
+> **Desde v2** la app también **firma dentro de la app** (la wallet de cada persona firma; la API arma la transacción, la envía y la verifica con el RPC). El Lab sigue sirviendo para desplegar los contratos, configurarlos y como respaldo para cualquier paso. Ver [Contrato v2](#contrato-v2).
 
 Tiempo estimado la primera vez: 30–40 minutos.
 
@@ -203,9 +205,96 @@ La app muestra esta misma tabla de errores en cada paso, en *«¿El Lab mostró 
 
 ---
 
+## Contrato v2
+
+El contrato v2 (`contracts/escrow-v2`) suma los pagos **por etapas** (1 a 5 fases), el **pago directo**, roles separados (`admin` y `arbitro`), pausa de emergencia y actualizaciones con **7 días de aviso**. Su documento para el auditor está en [contrato-v2.md](contrato-v2.md). El v1 sigue funcionando igual: los pedidos viejos se quedan en el v1.
+
+### 1. Cuentas
+
+| Cuenta | Papel | En testnet |
+|---|---|---|
+| `admin` | Configura el contrato y propone actualizaciones | Puede ser la del Equipo Cryptoville. En mainnet, **multifirma** |
+| `arbitro` | Resuelve disputas | Otra cuenta (no la misma que el admin). En mainnet, multifirma |
+| Tesorería | Recibe las comisiones y el pago de los locales extra | Otra cuenta, con trustline del token |
+| Llave de mantenimiento | La usa la API para ejecutar vencimientos y `extender` | Una cuenta nueva con un poco de XLM (Friendbot). No necesita USDC |
+
+### 2. Desplegar
+
+1. `npm run contract:build` → `contracts/dist/cryptoville_escrow_v2.wasm`.
+2. **Smart contracts → Upload and deploy contract**, con el admin como *Source account*: sube el `.wasm` y despliégalo con este constructor:
+
+   | Argumento | Valor |
+   |---|---|
+   | `admin` | `G…` del admin |
+   | `arbitro` | `G…` del árbitro |
+   | `token` | el `PAYMENT_TOKEN_ID` (`C…`) |
+   | `tesoreria` | `G…` de la tesorería |
+   | `comision_bps` | `300` (garantía y etapas: 3%) |
+   | `comision_directo_bps` | `100` (pago directo: 1%) |
+   | `plazo_revision_seg` | `259200` (3 días) |
+   | `plazo_disputa_seg` | `1209600` (14 días; después, cualquiera reparte 50/50) |
+   | `tope_pedido` | `0` en testnet (sin tope); `5000000000` en mainnet (500 USDC) |
+
+   Los valores salen de `packages/shared/src/reglas.ts` y `packages/shared/src/stellar/contrato-v2.ts` (`argumentosConstructorV2`).
+3. Copia la dirección `C…`: es tu **`ESCROW_V2_CONTRACT_ID`**.
+
+### 3. `.env`
+
+```dotenv
+ESCROW_V2_CONTRACT_ID=C…      # el contrato v2
+TESORERIA_DIRECCION=G…        # la misma del constructor
+ARBITRO_DIRECCION=G…          # el árbitro del v2 (y el del v1, si lo usas)
+STELLAR_RPC_URL=https://soroban-testnet.stellar.org
+STELLAR_VERIFICAR=si          # cada paso se verifica leyendo la red
+LLAVE_MANTENIMIENTO=S…        # solo en el servidor; vencimientos y extender
+```
+
+Sin `ESCROW_V2_CONTRACT_ID` la app solo ofrece el pago con garantía del v1. Sin `LLAVE_MANTENIMIENTO` los vencimientos los ejecuta la persona interesada desde la app.
+
+### 4. Firmar desde la app o desde el Lab
+
+- **En la app:** el botón «Firmar con mi wallet» arma la transacción, tu wallet la firma (Freighter, LOBSTR por QR, Pollar…) y la app la envía y la verifica.
+- **En el Lab (respaldo):** el panel del pedido muestra la función y los argumentos para copiar. Después pegas el hash en la app: la API lee esa transacción en la red y la rechaza si no es la que corresponde.
+
+| Paso | Función | Quién firma |
+|---|---|---|
+| Pagar con garantía o por etapas | `crear_pedido(cliente, proveedor, id, fases)` | Cliente |
+| Pago directo | `pagar_directo(cliente, proveedor, id, monto)` | Cliente |
+| Entregar una fase | `entregar_fase(proveedor, id, fase, huella)` | Proveedor (la huella la calcula la app con sus pruebas) |
+| Liberar una fase | `liberar_fase(cliente, id, fase)` | Cliente |
+| Pedir cambios | `pedir_cambios(cliente, id, fase)` | Cliente |
+| Disputa | `abrir_disputa(quien, id, fase)` → `resolver(arbitro, id, fase, resultado)` | Una de las partes → el árbitro |
+| Vencimientos | `cobrar_por_vencimiento`, `reembolsar_por_vencimiento`, `resolver_por_vencimiento` | Cualquiera (la llave de mantenimiento lo hace sola) |
+
+### 5. Actualizar el v2
+
+1. `npm run contract:build` muestra el hash del nuevo `cryptoville_escrow_v2.wasm`. Súbelo (solo *Upload*).
+2. Llama a `proponer_actualizacion(admin, wasm_hash)`. Queda público en la red.
+3. **7 días después**, llama a `ejecutar_actualizacion(admin)`. Antes de eso falla con `#18 AvisoNoCumplido`. Para arrepentirte: `cancelar_actualizacion(admin)`.
+
+### 6. Pausa de emergencia
+
+`pausar(admin)` frena los pedidos y pagos directos **nuevos**. Liberar, reembolsar, resolver y los vencimientos siguen funcionando. `reanudar(admin)` la quita.
+
+### Errores nuevos del v2
+
+| Mensaje | Qué pasa |
+|---|---|
+| `#11` Pausado | El contrato está en pausa: no se pueden crear pedidos nuevos |
+| `#12` TopeSuperado | El monto pasa del tope por pedido |
+| `#13` PlanInvalido | 0 fases o más de 5 |
+| `#14` FaseNoExiste | Ese número de fase no está en el plan |
+| `#15` FaseAnteriorPendiente | Primero hay que cerrar las fases anteriores |
+| `#16` SinCambios | Ya se pidieron los 2 cambios de esa fase |
+| `#17` SinActualizacion | No hay una actualización propuesta |
+| `#18` AvisoNoCumplido | Todavía no pasaron los 7 días de aviso |
+
+---
+
 ## Al pasar a mainnet
 
 - No uses el «USDC de prueba»: el escrow se despliega con el **contrato SAC del USDC real** en el argumento `token`. Su dirección se consulta en la documentación de Circle o de Stellar.
 - Cambia `STELLAR_NETWORK=mainnet`.
 - Usa cuentas reales y una cuenta **multifirma** como admin.
 - Antes, haz una **auditoría** del contrato.
+- La lista completa, con quién hace cada paso, está en [mainnet.md](mainnet.md).

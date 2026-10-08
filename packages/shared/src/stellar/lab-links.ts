@@ -32,6 +32,23 @@ export const PASSPHRASE: Record<RedStellar, string> = {
   mainnet: REDES.mainnet.passphrase,
 };
 
+/** Datos públicos de cada red: nombre, Horizon, RPC por defecto y passphrase. */
+export function datosRed(red: RedStellar): { label: string; horizonUrl: string; rpcUrl: string; passphrase: string } {
+  return REDES[red];
+}
+
+/** ¿A qué red pertenece una passphrase? (para avisar si la wallet está en otra red). */
+export function redDePassphrase(passphrase: string): RedStellar | null {
+  if (passphrase === REDES.testnet.passphrase) return 'testnet';
+  if (passphrase === REDES.mainnet.passphrase) return 'mainnet';
+  return null;
+}
+
+/** Enlace a stellar.expert (explorador público) para una transacción, un contrato o una cuenta. */
+export function enlaceExplorador(tipo: 'tx' | 'contract' | 'account', valor: string, red: RedStellar = 'testnet'): string {
+  return `https://stellar.expert/explorer/${red === 'mainnet' ? 'public' : 'testnet'}/${tipo}/${valor}`;
+}
+
 /** Escapa un valor con el formato de estado del Lab. */
 export function escaparValorLab(valor: string): string {
   return valor
@@ -68,13 +85,14 @@ export function enlaceTransaccion(hash: string, red: RedStellar = 'testnet'): st
 
 /** Páginas del Lab que se usan en las guías. */
 export function enlacePagina(
-  pagina: 'fondear' | 'crear-cuenta' | 'construir-tx' | 'desplegar' | 'explorador',
+  pagina: 'fondear' | 'crear-cuenta' | 'construir-tx' | 'firmar-tx' | 'desplegar' | 'explorador',
   red: RedStellar = 'testnet',
 ): string {
   const rutas = {
     fondear: '/account/fund',
     'crear-cuenta': '/account/create',
     'construir-tx': '/transaction/build',
+    'firmar-tx': '/transaction/sign',
     desplegar: '/smart-contracts/deploy-contract',
     explorador: '/smart-contracts/contract-explorer',
   } as const;

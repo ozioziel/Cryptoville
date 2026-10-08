@@ -1,4 +1,13 @@
 # Caddy: sirve la web y reenvía /api a NestJS.
+#
+# En un VPS compartido, delante puede haber otro proxy (el del dueño, con HTTPS). Caddy confía en la IP
+# que manda ese proxy solo si llega desde una red privada; así la API ve la IP real de cada persona.
+{
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
 # SITIO lo calcula deploy/deploy.sh a partir de PUBLIC_HOST:
 #   - nombre (sslip.io o dominio)  -> "140-238-10-25.sslip.io"  -> HTTPS automático (Let's Encrypt)
 #   - IP sola o localhost          -> "http://140.238.10.25"    -> solo HTTP
@@ -15,6 +24,8 @@
 		@estaticos path /assets/index-*
 		header @estaticos Cache-Control "public, max-age=31536000, immutable"
 		header /index.html Cache-Control "no-cache"
+		# El service worker de las notificaciones tiene que actualizarse siempre.
+		header /sw.js Cache-Control "no-cache"
 		try_files {path} /index.html
 		file_server
 	}

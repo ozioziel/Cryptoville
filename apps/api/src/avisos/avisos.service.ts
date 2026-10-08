@@ -3,17 +3,26 @@ import { ArrayMaxSize, IsArray, IsOptional, IsUUID } from 'class-validator';
 import { SesionGuard } from '../common/sesion.guard';
 import { UsuarioActual } from '../common/usuario-actual';
 import type { TipoAviso, Usuario } from '../generated/prisma/client';
+import { NotificacionesModule, NotificacionesService } from '../notificaciones/notificaciones.module';
 import { PrismaService } from '../prisma/prisma.service';
 
-/** Avisos en vivo: se guardan en la tabla `avisos` y la web los recibe por Supabase Realtime. */
+/**
+ * Avisos en vivo: se guardan en la tabla `avisos` y la web los recibe por Supabase Realtime.
+ * Además, si la persona los activó, llegan por notificación del navegador y por correo.
+ */
 @Injectable()
 export class AvisosService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificaciones: NotificacionesService,
+  ) {}
 
   async crear(usuarioId: string, tipo: TipoAviso, texto: string, pedidoId?: string | null, busquedaId?: string | null): Promise<void> {
     await this.prisma.aviso.create({
       data: { usuario_id: usuarioId, tipo, texto, pedido_id: pedidoId ?? null, busqueda_id: busquedaId ?? null },
     });
+    // Fuera de la app: no se espera (si falla, el aviso igual quedó en la campana).
+    void this.notificaciones.enviar(usuarioId, texto, { pedidoId, busquedaId });
   }
 }
 
@@ -43,5 +52,5 @@ export class AvisosController {
 }
 
 @Global()
-@Module({ providers: [AvisosService], controllers: [AvisosController], exports: [AvisosService] })
+@Module({ imports: [NotificacionesModule], providers: [AvisosService], controllers: [AvisosController], exports: [AvisosService] })
 export class AvisosModule {}

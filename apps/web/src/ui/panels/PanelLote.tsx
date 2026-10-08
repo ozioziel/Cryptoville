@@ -2,9 +2,15 @@ import { BARRIOS, nombreCategoria, textoCalificacion, type Barrio } from '@crypt
 import { useEffect, useState } from 'react';
 import { useSesion } from '../../features/auth/sesion';
 import { cargarResenas, type ResenaPublica } from '../../features/services/datos';
+import { cargarDestacados } from '../../features/portafolio/datos';
+import type { Proyecto } from '@cryptoville/shared';
+import { TarjetaProyecto } from './PanelPortafolio';
+import { obtenerConfig } from '../../lib/config';
 import { useEstado } from '../estado';
 import { chipDe } from '../villas';
 import { Avatar, Direccion, Garantia, fechaCorta } from '../components/basicos';
+import { BotonBloquear, BotonReportar, Nombre, Verificado } from '../components/Confianza';
+import { Icono } from '../components/Iconos';
 
 /**
  * Lo que ves al entrar a una casa: el local con sus servicios (como en la muestra aprobada),
@@ -12,13 +18,16 @@ import { Avatar, Direccion, Garantia, fechaCorta } from '../components/basicos';
  */
 export function PanelLote({ lote, barrio }: { lote: number; barrio?: Barrio }) {
   const { locales, abrir, villa } = useEstado();
-  const { usuario, local: miLocal } = useSesion();
+  const { usuario, locales: misLocales } = useSesion();
   const b = barrio ?? villa;
   const local = locales.find((l) => l.lote === lote && l.barrio === b);
   const [resenas, setResenas] = useState<ResenaPublica[] | null>(null);
+  const [cuadros, setCuadros] = useState<Proyecto[]>([]);
 
   useEffect(() => {
-    if (local) void cargarResenas(local.usuario_id).then(setResenas);
+    if (!local) return;
+    void cargarResenas(local.usuario_id).then(setResenas);
+    void cargarDestacados(local.usuario_id).then(setCuadros);
   }, [local]);
 
   if (!local) {
@@ -31,16 +40,21 @@ export function PanelLote({ lote, barrio }: { lote: number; barrio?: Barrio }) {
         <p>
           Este lote de la <strong>Villa {BARRIOS[b].nombre}</strong> está disponible.
         </p>
-        {usuario && !miLocal && (
+        {usuario && misLocales.length === 0 && (
           <button type="button" className="boton boton-primario" onClick={() => abrir({ tipo: 'mi-local' })}>
             Abrir mi local
           </button>
         )}
-        {!usuario && <p className="tenue">Entra con tu wallet para abrir tu propio local.</p>}
-        {miLocal && (
-          <p className="tenue">
-            Ya tienes un local en la Villa {BARRIOS[miLocal.barrio].nombre} (lote {miLocal.lote}).
-          </p>
+        {!usuario && <p className="tenue">Entra para abrir tu propio local.</p>}
+        {misLocales.length > 0 && (
+          <>
+            <p className="tenue">
+              Ya tienes {misLocales.length === 1 ? 'un local' : `${misLocales.length} locales`}. Puedes abrir hasta 3 gratis; los que siguen se pagan una sola vez.
+            </p>
+            <button type="button" className="boton" onClick={() => abrir({ tipo: 'mis-locales' })}>
+              Abrir otro local
+            </button>
+          </>
         )}
       </div>
     );
@@ -54,9 +68,16 @@ export function PanelLote({ lote, barrio }: { lote: number; barrio?: Barrio }) {
         <Avatar frame={local.usuario.avatar} apariencia={local.usuario.apariencia} tamano={66} titulo={local.usuario.nombre} />
       </div>
       <div>
-        <h2 className="local-nombre">{local.nombre}</h2>
+        <div className="fila espaciada">
+          <h2 className="local-nombre">{local.nombre}</h2>
+          {esMio && (
+            <button type="button" className="boton boton-mini" onClick={() => abrir({ tipo: 'mi-local', localId: local.id })}>
+              <Icono nombre="editar" tamano={14} /> Editar
+            </button>
+          )}
+        </div>
         <p className="tenue">
-          {local.usuario.nombre} · Villa {BARRIOS[local.barrio].nombre}
+          <Nombre nombre={local.usuario.nombre} verificado={local.usuario.verificado} /> · Villa {BARRIOS[local.barrio].nombre}
         </p>
       </div>
       <div className="fila chips">
@@ -88,26 +109,44 @@ export function PanelLote({ lote, barrio }: { lote: number; barrio?: Barrio }) {
           </li>
         ))}
       </ul>
-      {esMio ? (
-        <button type="button" className="boton" onClick={() => abrir({ tipo: 'mi-local' })}>
-          Editar mi local
+      {!esMio && local.servicios.length > 0 && (
+        <button type="button" className="boton boton-primario" onClick={() => abrir({ tipo: 'servicio', servicioId: local.servicios[0].id })}>
+          Pedir un servicio
         </button>
-      ) : (
-        local.servicios.length > 0 && (
-          <button type="button" className="boton boton-primario" onClick={() => abrir({ tipo: 'servicio', servicioId: local.servicios[0].id })}>
-            Pedir un servicio
-          </button>
-        )
       )}
-      <Garantia />
+      {/* Con el contrato v2 cada servicio ofrece tres formas de pagar (se eligen al pedirlo). */}
+      {!obtenerConfig().contrato_v2_id && <Garantia />}
+
+      {cuadros.length > 0 && (
+        <section className="pila-compacta">
+          <h3>En la pared</h3>
+          <div className="grilla-proyectos">
+            {cuadros.map((p) => (
+              <TarjetaProyecto key={p.id} proyecto={p} marcarPared={false} onAbrir={() => abrir({ tipo: 'proyecto', id: p.id })} />
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="pila">
-        <h3>Sobre {local.usuario.nombre}</h3>
+        <h3 className="fila">
+          Sobre {local.usuario.nombre} <Verificado si={local.usuario.verificado} />
+        </h3>
         {local.usuario.bio && <p>{local.usuario.bio}</p>}
         <p className="tenue pequeno">
           {rep ? `${rep.nivel} · ${rep.completados} pedidos completados · ${textoCalificacion(rep.calificacion, rep.total_resenas)}` : 'Nuevo'}
         </p>
         <Direccion valor={local.usuario.direccion} />
+        <button type="button" className="boton" onClick={() => abrir({ tipo: 'portafolio', usuarioId: local.usuario_id })}>
+          <Icono nombre="cuadro" /> Ver su portafolio
+        </button>
+        {!esMio && (
+          <div className="fila">
+            <BotonReportar tipo="local" objetoId={local.id} nombre={local.nombre} />
+            <BotonReportar tipo="persona" objetoId={local.usuario_id} nombre={local.usuario.nombre} />
+            <BotonBloquear usuarioId={local.usuario_id} nombre={local.usuario.nombre} />
+          </div>
+        )}
       </section>
 
       <section className="pila">
@@ -122,7 +161,10 @@ export function PanelLote({ lote, barrio }: { lote: number; barrio?: Barrio }) {
                 <span className="estrellas">{'★'.repeat(r.calificacion)}</span>
               </div>
               {r.comentario && <p>{r.comentario}</p>}
-              <span className="tenue pequeno">{fechaCorta(r.creado_en)} · reseña de un pedido pagado en garantía</span>
+              <span className="fila espaciada">
+                <span className="tenue pequeno">{fechaCorta(r.creado_en)} · reseña de un pedido pagado</span>
+                <BotonReportar tipo="resena" objetoId={r.id} nombre={'la reseña de ' + r.autor.nombre} />
+              </span>
             </li>
           ))}
         </ul>

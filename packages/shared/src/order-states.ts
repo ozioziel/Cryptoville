@@ -1,5 +1,5 @@
 // Estados del pedido y transiciones permitidas. Única fuente de verdad para la web y la API.
-import type { AccionPedido, Actor, EstadoPedido } from './types/index.js';
+import type { AccionPedido, AccionRegistrada, Actor, EstadoPedido } from './types/index.js';
 
 export type RolEnPedido = 'cliente' | 'proveedor' | 'arbitro';
 
@@ -117,6 +117,7 @@ export const ETIQUETA_ESTADO: Record<EstadoPedido, string> = {
   liberado: 'Pago liberado',
   reembolsado: 'Reembolsado',
   resuelto: 'Disputa resuelta',
+  finalizado: 'Terminado',
 };
 
 export const ESTADOS_FINALES: readonly EstadoPedido[] = [
@@ -124,15 +125,40 @@ export const ESTADOS_FINALES: readonly EstadoPedido[] = [
   'liberado',
   'reembolsado',
   'resuelto',
+  'finalizado',
 ];
+
+/** Nombre de cualquier paso del historial (los del contrato v1, los de las fases y el pago directo). */
+export const ETIQUETA_ACCION: Record<AccionRegistrada, string> = {
+  aceptar: 'Aceptar pedido',
+  cancelar: 'Cancelar pedido',
+  crear_pedido: 'Pagar en garantía',
+  marcar_entregado: 'Marcar como entregado',
+  liberar: 'Liberar el pago',
+  rechazar: 'Devolver el dinero',
+  abrir_disputa: 'Abrir disputa',
+  resolver: 'Resolver disputa',
+  reembolsar_por_vencimiento: 'Recuperar mi dinero (vencido)',
+  cobrar_por_vencimiento: 'Cobrar (plazo de revisión vencido)',
+  aceptar_plan: 'Aceptar el plan de fases',
+  pagar_directo: 'Pagar directo',
+  confirmar_recibido: 'Confirmar que recibí el trabajo',
+  entregar_fase: 'Entregar la fase',
+  liberar_fase: 'Liberar el pago de la fase',
+  pedir_cambios: 'Pedir cambios',
+  resolver_por_vencimiento: 'Repartir 50/50 (disputa vencida)',
+};
 
 export function esFinal(estado: EstadoPedido): boolean {
   return ESTADOS_FINALES.includes(estado);
 }
 
-/** Solo los pedidos cerrados con el dinero movido en el contrato permiten reseña. */
+/**
+ * Solo los pedidos cerrados con el dinero movido permiten reseña:
+ * liberado o resuelto (contrato v1) y finalizado (fases del contrato v2 o pago directo).
+ */
 export function permiteResena(estado: EstadoPedido): boolean {
-  return estado === 'liberado' || estado === 'resuelto';
+  return estado === 'liberado' || estado === 'resuelto' || estado === 'finalizado';
 }
 
 function actorCoincide(actor: Actor, rol: RolEnPedido): boolean {

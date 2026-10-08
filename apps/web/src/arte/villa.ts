@@ -409,6 +409,38 @@ export function crearLoteDisponible(tamano?: { ancho: number; alto: number }): s
   );
 }
 
+export const ANCHO_LETRERO_SECTOR = 136;
+export const ALTO_LETRERO_SECTOR = 74;
+
+/**
+ * Letrero de madera para pasar a otro sector de la villa («Creativo B →» al final de la última calle,
+ * «← Creativo» al empezar la primera). Solo la madera: el texto lo pone Phaser encima (con la fuente de la app).
+ */
+export function crearLetreroSector(direccion: 'siguiente' | 'anterior', tamano?: { ancho: number; alto: number }): string {
+  const tabla =
+    direccion === 'siguiente'
+      ? 'M4 8H112L132 25L112 42H4Z'
+      : 'M24 8H132V42H24L4 25Z';
+  const cuerpo =
+    `<g stroke="${TINTA}" stroke-width="2.5" stroke-linejoin="round">` +
+    `<rect x="63" y="40" width="10" height="30" rx="2" fill="#a0714f"/>` +
+    `<path d="${tabla}" fill="${CREMA}"/>` +
+    `<path d="${direccion === 'siguiente' ? 'M10 14H108' : 'M28 14H126'}" stroke="#e8c9a8" stroke-width="2"/>` +
+    `</g><ellipse cx="68" cy="71" rx="16" ry="3" fill="${TINTA}" opacity=".15"/>`;
+  return envolver(`0 0 ${ANCHO_LETRERO_SECTOR} ${ALTO_LETRERO_SECTOR}`, cuerpo, tamano);
+}
+
+export const LADO_INSIGNIA = 14;
+
+/** Insignia ✔ de cuenta verificada (KYC), junto al nombre sobre la cabeza. Mismo azul que en la interfaz. */
+export function crearInsignia(tamano?: { ancho: number; alto: number }): string {
+  return envolver(
+    '0 0 14 14',
+    `<circle cx="7" cy="7" r="6.2" fill="#3d85c6" stroke="#fdf6e3" stroke-width="1.2"/><path d="M4.2 7.2L6.2 9.1L9.9 5.2" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>`,
+    tamano,
+  );
+}
+
 export function crearMarca(tamano?: { ancho: number; alto: number }): string {
   return envolver('0 0 24 22', `<path d="M3 3H21L12 19Z" fill="${CREMA}" stroke="${TINTA}" stroke-width="2.5" stroke-linejoin="round"/>`, tamano);
 }

@@ -1601,3 +1601,901 @@ button.cartel:focus-visible {
     transition: none !important;
   }
 }
+
+/* =====================================================================
+ * Cryptoville v2
+ * ===================================================================== */
+
+/* ---------- Franja de testnet: avisa que el dinero no es real (no aparece en mainnet) ---------- */
+.franja-red {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 45;
+  height: 22px;
+  padding-top: env(safe-area-inset-top);
+  box-sizing: content-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fbf0d6;
+  border-bottom: 1px solid rgba(233, 180, 76, 0.45);
+  color: #5c4310;
+  font: 700 12px var(--fuente);
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+@media (min-width: 701px) {
+  .con-franja .barra {
+    top: calc(max(16px, env(safe-area-inset-top)) + 22px);
+  }
+  .con-franja .panel {
+    top: 98px;
+  }
+  .con-franja .notificaciones {
+    top: 98px;
+  }
+}
+/* En el celular los paneles son hoja inferior: solo bajan la barra, las villas y los avisos. */
+@media (max-width: 700px) {
+  .con-franja .barra {
+    top: calc(max(10px, env(safe-area-inset-top)) + 22px);
+  }
+  .con-franja .villas {
+    top: calc(max(10px, env(safe-area-inset-top)) + 70px);
+  }
+  .con-franja .notificaciones {
+    top: calc(max(10px, env(safe-area-inset-top)) + 122px);
+  }
+}
+
+/* ---------- Avisos breves: éxito, error y cargando ---------- */
+.notificacion-exito {
+  border-left: 4px solid var(--verde);
+}
+.notificacion-error {
+  border-left: 4px solid var(--rojo);
+  background: #fff7f5;
+}
+.notificacion-cargando {
+  border-left: 4px solid var(--azul);
+}
+.notificacion-cargando .notificacion-texto::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  border: 2px solid var(--azul);
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: girar 0.8s linear infinite;
+}
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- Lo que necesita un abogado: en rojo, siempre ---------- */
+.abogado {
+  border: 1px solid rgba(180, 72, 60, 0.45);
+  border-left: 4px solid var(--rojo);
+  border-radius: var(--radio);
+  padding: 10px 12px;
+  background: #fbe9e6;
+  color: var(--rojo);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.abogado strong {
+  display: block;
+  margin-bottom: 2px;
+  font-weight: 800;
+}
+.abogado-aviso {
+  display: block;
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+/* ---------- Documentos legales ---------- */
+.documento-legal h3 {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+.documento-legal h4 {
+  margin: 4px 0 0;
+  font-size: 14px;
+}
+.documento-legal p,
+.lista-legal {
+  margin: 0;
+  line-height: 1.55;
+}
+.lista-legal {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.tabla-legal {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.tabla-legal th,
+.tabla-legal td {
+  text-align: left;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--linea);
+  vertical-align: top;
+}
+.tabla-legal th {
+  font-weight: 800;
+  color: var(--tenue);
+}
+.enlaces-legales {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-top: 6px;
+  border-top: 1px solid var(--linea);
+}
+/* Botón con aspecto de enlace (documentos, «Enviar comentarios»). */
+.enlace {
+  border: 0;
+  background: none;
+  padding: 2px 0;
+  color: var(--azul);
+  font: 600 13px var(--fuente);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  align-self: flex-start;
+}
+.enlace:focus-visible {
+  outline: none;
+  box-shadow: var(--foco);
+  border-radius: 4px;
+}
+.casilla-fila {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-weight: 600;
+}
+
+/* ---------- Entrar: botón grande (correo) y chico (wallet) ---------- */
+.boton-grande {
+  min-height: 52px;
+  font-size: 16px;
+}
+.boton-chico {
+  align-self: center;
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: 13px;
+  background: transparent;
+}
+
+/* ---------- Comentarios del equipo ---------- */
+.comentario-nuevo {
+  border-left: 4px solid var(--primario);
+}
+.comentario-resuelto {
+  opacity: 0.65;
+}
+
+/* ---------- Insignia de verificado, reportar y bloquear ---------- */
+.verificado {
+  display: inline-flex;
+  color: var(--azul);
+  flex-shrink: 0;
+  vertical-align: -2px;
+}
+.nombre-con-insignia {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.enlace-peligro {
+  color: var(--rojo);
+  font-size: 12px;
+}
+.opciones-motivo {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---------- Métodos de pago: tres tarjetas una al lado de la otra; debajo, la explicación ---------- */
+.metodos {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 2px;
+}
+.metodo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  text-align: center;
+  padding: 12px 6px 10px;
+  border: 1.5px solid var(--linea);
+  border-radius: var(--radio);
+  background: #fff;
+  color: var(--tinta);
+  font: 500 13px var(--fuente);
+  cursor: pointer;
+}
+.metodo:hover:not(:disabled) {
+  border-color: var(--linea-fuerte);
+}
+.metodo.activo {
+  border-color: var(--primario);
+  box-shadow: 0 0 0 3px rgba(224, 122, 95, 0.18);
+}
+.metodo:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.metodo:focus-visible {
+  outline: none;
+  box-shadow: var(--foco);
+}
+.metodo strong {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+.metodo-icono {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--crema);
+}
+/* El signo de alerta del pago directo, en la esquina del icono. */
+.metodo-signo {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: #fff;
+  color: #b7791f;
+  box-shadow: 0 0 0 1px rgba(233, 180, 76, 0.55);
+}
+.metodo-directo .metodo-icono {
+  background: #fbf0d6;
+  color: #9a6b12;
+}
+.metodo-garantia .metodo-icono {
+  background: #eef3ea;
+  color: var(--verde);
+}
+.metodo-etapas .metodo-icono {
+  background: #eef4fa;
+  color: var(--azul);
+}
+.metodo-comision {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--crema);
+  font-weight: 700;
+  font-size: 12px;
+}
+.metodo.activo .metodo-comision {
+  background: rgba(224, 122, 95, 0.14);
+  color: var(--primario-oscuro);
+}
+.metodo-texto {
+  margin: 0;
+  color: var(--tenue);
+  font-size: 13px;
+  line-height: 1.45;
+}
+/* La alerta del pago directo, en ámbar. */
+.metodo-alerta {
+  display: block;
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #fbf0d6;
+  border: 1px solid rgba(233, 180, 76, 0.55);
+  color: #5c4310;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+.metodo-alerta .ico {
+  vertical-align: -3px;
+}
+.metodo-reputacion {
+  display: block;
+  margin-top: 4px;
+  font-weight: 600;
+}
+
+/* ---------- Plan de fases: tabla con scroll dentro de su caja ---------- */
+.tabla-plan-caja {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: #fff;
+}
+.tabla-plan {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.tabla-plan th {
+  position: sticky;
+  top: 0;
+  background: var(--crema);
+  text-align: left;
+  font-weight: 800;
+  color: var(--tenue);
+  padding: 8px;
+  z-index: 1;
+}
+.tabla-plan td {
+  padding: 6px 8px;
+  border-top: 1px solid var(--linea);
+  vertical-align: top;
+}
+.tabla-plan-numero {
+  font-weight: 800;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tabla-plan .campo {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+.campo-corto {
+  width: 72px;
+}
+.opciones-pruebas {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.barra-suma {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.barra-suma-fondo {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(59, 42, 37, 0.08);
+  overflow: hidden;
+}
+.barra-suma-relleno {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--dorado);
+  transition: width 0.2s;
+}
+.barra-suma-relleno.ok {
+  background: var(--verde);
+}
+.barra-suma-relleno.pasa {
+  background: var(--rojo);
+}
+.texto-exito {
+  color: var(--verde);
+}
+.texto-aviso {
+  color: #9a6b12;
+}
+
+/* ---------- Camino de fases: un punto por fase, se desliza de lado ---------- */
+.camino-fases {
+  list-style: none;
+  margin: 0;
+  padding: 4px 2px 8px;
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+}
+.camino-paso {
+  flex: 0 0 auto;
+  min-width: 96px;
+  position: relative;
+  scroll-snap-align: start;
+}
+/* La línea que une los puntos. */
+.camino-paso + .camino-paso::before {
+  content: '';
+  position: absolute;
+  top: 17px;
+  left: -50%;
+  width: 100%;
+  height: 3px;
+  background: var(--linea-fuerte);
+  z-index: 0;
+}
+.camino-paso button {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 0;
+  padding: 0 4px;
+  cursor: pointer;
+  font: 600 11px var(--fuente);
+  color: var(--tenue);
+}
+.camino-paso button:focus-visible {
+  outline: none;
+  box-shadow: var(--foco);
+  border-radius: 8px;
+}
+.camino-punto {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  background: #fff;
+  border: 3px solid var(--linea-fuerte);
+  color: var(--tinta);
+}
+.camino-texto {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.camino-texto strong {
+  color: var(--tinta);
+  font-size: 12px;
+}
+.camino-en_curso .camino-punto {
+  border-color: var(--azul);
+}
+.camino-entregada .camino-punto {
+  border-color: var(--dorado);
+  background: #fbf0d6;
+}
+.camino-liberada .camino-punto,
+.camino-resuelta .camino-punto {
+  border-color: var(--verde);
+  background: var(--verde);
+  color: #fff;
+}
+.camino-reembolsada .camino-punto {
+  border-color: var(--tenue);
+  background: #eee;
+}
+.camino-en_disputa .camino-punto {
+  border-color: var(--rojo);
+  background: #fbe9e6;
+}
+.camino-paso.elegido .camino-punto {
+  box-shadow: 0 0 0 4px rgba(224, 122, 95, 0.25);
+}
+
+/* ---------- Pruebas, video y QR ---------- */
+.lista-pruebas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.prueba {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--linea);
+  border-radius: 10px;
+  background: #fff;
+}
+.huella {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+.video-prueba {
+  width: 100%;
+  max-height: 260px;
+  border-radius: 10px;
+  background: #000;
+}
+.qr-pago {
+  align-items: center;
+}
+.qr-imagen {
+  display: block;
+  width: min(260px, 100%);
+}
+.qr-imagen svg {
+  width: 100%;
+  height: auto;
+}
+.paso-secundario {
+  border-style: dashed;
+}
+
+/* ---------- Mis locales ---------- */
+.tarjeta-local {
+  flex-wrap: nowrap;
+}
+.tarjeta-local-color {
+  flex: none;
+  width: 10px;
+  align-self: stretch;
+  border-radius: 999px;
+}
+/* Datos para copiar en Stellar Lab (contrato, función, argumentos). */
+.datos-copiar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+  font-size: 13px;
+}
+.datos-copiar dt {
+  font-weight: 700;
+}
+.datos-copiar dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Personalizar: dos opciones grandes (Mi personaje / Un local) ---------- */
+.opciones-grandes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.opcion-grande {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px 14px;
+  text-align: left;
+  border: 1.5px solid var(--linea);
+  border-radius: var(--radio);
+  background: #fff;
+  color: var(--tinta);
+  font: 500 14px var(--fuente);
+  cursor: pointer;
+}
+.opcion-grande .ico {
+  color: var(--primario);
+}
+.opcion-grande:hover {
+  border-color: var(--linea-fuerte);
+}
+.opcion-grande.activa {
+  border-color: var(--primario);
+  box-shadow: 0 0 0 3px rgba(224, 122, 95, 0.18);
+}
+.opcion-grande:focus-visible {
+  outline: none;
+  box-shadow: var(--foco);
+}
+
+/* ---------- Sectores de la villa (A, B, C…) junto al selector de villas ---------- */
+.sectores {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 2px;
+  padding-left: 6px;
+  border-left: 1px solid var(--linea);
+}
+.sector {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--tenue);
+  font: 800 13px var(--fuente);
+  cursor: pointer;
+}
+.sector:hover {
+  background: var(--crema);
+}
+.sector.activo {
+  background: var(--crema);
+  color: var(--tinta);
+  box-shadow: inset 0 0 0 1.5px var(--linea-fuerte);
+}
+.sector:focus-visible {
+  outline: none;
+  box-shadow: var(--foco);
+}
+
+/* ---------- Portafolio: tarjetas de proyectos, galería, videos y enlaces ---------- */
+.grilla-proyectos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.tarjeta-proyecto {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: #fff;
+  color: var(--tinta);
+  font: inherit;
+  cursor: pointer;
+}
+.tarjeta-proyecto:hover {
+  border-color: var(--linea-fuerte);
+  box-shadow: var(--sombra-chica);
+}
+.tarjeta-proyecto:focus-visible {
+  outline: none;
+  box-shadow: var(--foco);
+}
+.tarjeta-proyecto img,
+.tarjeta-proyecto-vacia {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: var(--crema);
+}
+.tarjeta-proyecto-vacia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--tenue);
+}
+.tarjeta-proyecto-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px 10px;
+  min-width: 0;
+}
+.tarjeta-proyecto-texto b {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tarjeta-proyecto .badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+.galeria {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.galeria-miniaturas {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.galeria-miniaturas button {
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+}
+.galeria-miniaturas button.activa {
+  border-color: var(--primario);
+}
+.galeria-miniaturas img {
+  display: block;
+  width: 56px;
+  height: 42px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+.miniatura-editable {
+  position: relative;
+  display: inline-flex;
+}
+.miniatura-editable img {
+  width: 72px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--linea);
+}
+.miniatura-editable .boton-icono {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 22px;
+  height: 22px;
+  background: #fff;
+  border: 1px solid var(--linea);
+}
+.video-externo {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radio);
+  overflow: hidden;
+  background: #1f1a18;
+}
+.video-externo iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+.enlace-externo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--primario-oscuro);
+  font-weight: 700;
+}
+.adjuntar-proyectos {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: #fff;
+}
+
+/* ---------- Cerca de una puerta o de una persona: botones apilados ---------- */
+.acciones-cerca {
+  position: absolute;
+  bottom: max(24px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+}
+.acciones-cerca .boton-entrar {
+  position: static;
+  transform: none;
+  max-width: 100%;
+}
+.acciones-cerca .boton-entrar:active:not(:disabled) {
+  transform: translateY(3px);
+}
+.boton-hablar {
+  background: var(--papel);
+  color: var(--tinta);
+  border: 1.5px solid var(--linea-fuerte);
+  box-shadow: 0 4px 0 var(--linea-fuerte), var(--sombra);
+}
+
+/* ---------- Chat por cercanía: la ventanita ---------- */
+.chat-cercania {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 64px);
+  z-index: 25;
+  display: flex;
+  flex-direction: column;
+  width: min(330px, calc(100vw - 32px));
+  max-height: min(420px, calc(100dvh - 180px));
+  background: var(--papel);
+  border: 1px solid var(--linea);
+  border-radius: 16px;
+  box-shadow: var(--sombra);
+  overflow: hidden;
+  animation: aparecer 0.15s ease-out;
+}
+.chat-cabecera {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 10px 6px 12px;
+}
+.chat-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 0 12px 8px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--linea);
+}
+.chat-mensajes {
+  list-style: none;
+  margin: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 90px;
+}
+.chat-mensaje {
+  align-self: flex-start;
+  max-width: 85%;
+  padding: 6px 10px;
+  border-radius: 12px 12px 12px 4px;
+  background: #fff;
+  border: 1px solid var(--linea);
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.chat-mensaje.propio {
+  align-self: flex-end;
+  border-radius: 12px 12px 4px 12px;
+  background: #f6e7e4;
+  border-color: rgba(224, 122, 95, 0.35);
+}
+.chat-vacio {
+  align-self: center;
+  text-align: center;
+}
+.chat-escribir {
+  display: flex;
+  gap: 6px;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--linea);
+}
+.chat-escribir .campo {
+  flex: 1;
+  min-width: 0;
+}
+.chat-nota {
+  margin: 0;
+  padding: 2px 12px 8px;
+  font-size: 11px;
+}
+@media (max-width: 700px) {
+  .chat-cercania {
+    left: 16px;
+    right: 16px;
+    width: auto;
+    bottom: calc(max(16px, env(safe-area-inset-bottom)) + 120px);
+    max-height: 46dvh;
+  }
+}

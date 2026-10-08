@@ -43,7 +43,8 @@ Lo hacen las migraciones de Prisma (`apps/api/prisma/migrations`):
 - activan RLS (solo lectura para la web);
 - crean la vista `reputacion`;
 - agregan las tablas a Realtime;
-- crean el bucket público `fotos` (2 MB, solo imágenes).
+- crean el bucket público `fotos` (2 MB, solo imágenes);
+- **desde v2:** crean los buckets privados `pruebas` (50 MB: pruebas de las fases) y `capturas` (2 MB: capturas de los comentarios), y las reglas de los canales privados de Realtime para «personas en línea».
 
 - **En el VPS:** `bash deploy/deploy.sh` aplica las migraciones automáticamente.
 - **Desde tu PC:** necesitas un archivo con las variables de la nube. No pises tu `.env` local:
@@ -58,14 +59,32 @@ Lo hacen las migraciones de Prisma (`apps/api/prisma/migrations`):
 | Dónde | Qué deberías ver |
 |---|---|
 | **Table Editor** | `usuarios`, `locales`, `servicios`, `pedidos`, `pasos_pedido`, `mensajes`, `disputas`, `resenas`, `avisos`, `desafios_login`, todas con el candado de RLS |
-| **Storage** | El bucket `fotos`, marcado como público |
-| **Database → Publications → supabase_realtime** | `mensajes`, `avisos`, `pedidos` y `pasos_pedido` |
+| **Storage** | El bucket `fotos`, marcado como público, y desde v2 `pruebas` y `capturas`, **privados** |
+| **Database → Publications → supabase_realtime** | `mensajes`, `avisos`, `pedidos` y `pasos_pedido`; `busquedas` y `propuestas` (v1.2); desde v2 también `fases`, `pruebas`, `verificaciones` y `mensajes_cercania` |
+| **Database → Policies → realtime.messages** | Desde v2: «villa: leer con sesion» y «villa: enviar con sesion» |
 
 Si el bucket no aparece, créalo a mano:
 - **Name:** `fotos`;
 - **Public bucket:** sí;
 - **File size limit:** 2 MB;
 - **Allowed MIME types:** `image/png, image/jpeg, image/webp`.
+
+Si los buckets de v2 no aparecen, créalos a mano igual que `fotos`, pero **privados**:
+
+| Bucket | Público | Tamaño máximo | Tipos |
+|---|---|---|---|
+| `pruebas` | No | 50 MB | `image/png, image/jpeg, image/webp, application/pdf, application/zip, text/plain, audio/mpeg, audio/wav` (los de `archivos.pruebaTipos` en `packages/shared/src/reglas.ts`) |
+| `capturas` | No | 2 MB | `image/png, image/jpeg, image/webp` |
+
+Los archivos privados se suben y se leen solo con URLs firmadas que da la API (las pruebas las ven las partes del pedido y el árbitro).
+
+### Realtime: canales privados (personas en línea)
+
+Las personas que caminan por la villa se ven por **Realtime Presence y Broadcast**, en un canal privado por villa y sector (`villa:creativo:1`). Solo entran cuentas con sesión (y no suspendidas): lo controlan las políticas de `realtime.messages` de la migración `20261007000800_chat_cercania`.
+
+- En **Project Settings → Realtime**, deja activo **Realtime Authorization** (canales privados). Si el proyecto no lo tiene, la web usa un canal público y avisa en la consola.
+- Las posiciones **no se guardan** en la base. Los mensajes del chat por cercanía sí (7 días), en `mensajes_cercania`.
+- Cada posición es un mensaje de Realtime (hasta 8 por segundo por persona que se mueve). Revisa la cuota de mensajes de tu plan antes de abrir al público.
 
 ## 5. Datos de ejemplo (opcional)
 
@@ -84,3 +103,4 @@ El seed **no borra datos reales**: si encuentra usuarios que no son de ejemplo, 
 | Respaldos | El plan gratuito no trae respaldos descargables. El contenedor `backups` del VPS guarda uno diario en `deploy/backups/` (7 días) |
 | Llave secreta | Si la `service_role` o `secret` se filtra, rótala en **Project Settings → API Keys** y actualiza el `.env` |
 | `AUTH_PASSWORD_SECRET` | No lo cambies después de tener usuarios: es lo que permite que cada wallet vuelva a entrar a su cuenta |
+| Mainnet | Usa un **proyecto nuevo** para mainnet, nunca el de testnet. La lista completa está en [mainnet.md](mainnet.md) |

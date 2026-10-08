@@ -101,3 +101,12 @@ export async function firmanteDesdeSecreta(secreta: string): Promise<FirmanteLoc
     firmar: async (mensaje) => aBase64(await ed.signAsync(hashSep53(mensaje), semilla)),
   };
 }
+
+/** Firma una transacción con una llave secreta de TESTNET (solo en desarrollo, con las wallets de ejemplo). */
+export async function firmarTransaccionLocal(secreta: string, xdr: string, passphrase: string): Promise<string> {
+  if (!import.meta.env.DEV) throw new Error('Solo disponible en desarrollo');
+  const { Keypair, TransactionBuilder } = await import('@stellar/stellar-sdk');
+  const tx = TransactionBuilder.fromXDR(xdr, passphrase);
+  tx.sign(Keypair.fromSecret(secreta.trim()));
+  return tx.toXDR();
+}

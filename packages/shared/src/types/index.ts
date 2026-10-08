@@ -167,7 +167,10 @@ export const AVATARES = [84, 85, 86, 87, 88, 96, 97, 98, 99, 100, 111, 112] as c
 
 export const MAX_SERVICIOS_POR_LOCAL = 6;
 
-/** Estados del pedido en la app. Los 6 últimos reflejan el estado del contrato. */
+/**
+ * Estados del pedido en la app. Los 6 de pagado a resuelto reflejan el estado del contrato v1.
+ * `finalizado`: un pedido por fases (contrato v2) o un pago directo que terminó.
+ */
 export type EstadoPedido =
   | 'solicitado'
   | 'aceptado'
@@ -177,7 +180,8 @@ export type EstadoPedido =
   | 'en_disputa'
   | 'liberado'
   | 'reembolsado'
-  | 'resuelto';
+  | 'resuelto'
+  | 'finalizado';
 
 /** Acciones que mueven un pedido de un estado a otro. */
 export type AccionPedido =
@@ -191,6 +195,19 @@ export type AccionPedido =
   | 'resolver'
   | 'reembolsar_por_vencimiento'
   | 'cobrar_por_vencimiento';
+
+/** Acciones de los pedidos por fases (contrato v2) y del pago directo. Ver packages/shared/src/pagos.ts. */
+export type AccionV2 =
+  | 'aceptar_plan'
+  | 'pagar_directo'
+  | 'confirmar_recibido'
+  | 'entregar_fase'
+  | 'liberar_fase'
+  | 'pedir_cambios'
+  | 'resolver_por_vencimiento';
+
+/** Cualquier paso que queda en el historial de un pedido. */
+export type AccionRegistrada = AccionPedido | AccionV2;
 
 /** Quién puede ejecutar una acción. */
 export type Actor = 'cliente' | 'proveedor' | 'participante' | 'arbitro';
@@ -207,6 +224,10 @@ export interface Usuario {
   /** Persona en vectores. Si es null, se usa la equivalente a `avatar`. */
   apariencia: AparienciaPersona | null;
   rol: Rol;
+  /** KYC aprobado: insignia ✔ junto al nombre. */
+  verificado?: boolean;
+  /** Suspendida por el equipo. */
+  suspendido?: boolean;
   creado_en: string;
 }
 
@@ -251,6 +272,17 @@ export interface Pedido {
   detalle: string;
   /** Fecha límite de entrega acordada (ISO). Se fija al aceptar. */
   fecha_limite: string | null;
+  /** Cómo se paga: directo, con garantía o por etapas (ver pagos.ts). */
+  metodo_pago?: 'garantia' | 'directo' | 'etapas';
+  /** Contrato donde vive el pedido (v1: una entrega; v2: fases y pago directo). */
+  contrato?: 'v1' | 'v2';
+  /** Cuándo aceptó el cliente el plan de fases (por etapas). */
+  plan_aceptado_en?: string | null;
+  /** Lo que el cliente pidió cambiar del plan. */
+  plan_comentario?: string | null;
+  /** Wallets del pedido en el contrato (vacías = la wallet de la cuenta). */
+  direccion_cliente?: string | null;
+  direccion_proveedor?: string | null;
   creado_en: string;
   actualizado_en: string;
 }
@@ -259,11 +291,16 @@ export interface Pedido {
 export interface PasoPedido {
   id: string;
   pedido_id: string;
-  accion: AccionPedido;
+  accion: AccionRegistrada;
+  /** Fase del pedido (en los pedidos por fases). */
+  fase?: number | null;
   hash: string | null;
   declarado_por: string;
   verificado_por: string | null;
   verificado_en: string | null;
+  /** Cryptoville leyó la transacción en la red y coincide con el pedido. */
+  en_cadena?: boolean;
+  ledger?: number | null;
   creado_en: string;
 }
 
@@ -321,7 +358,16 @@ export type TipoAviso =
   | 'nuevo_mensaje'
   | 'nueva_propuesta'
   | 'propuesta_aceptada'
-  | 'busqueda_cerrada';
+  | 'busqueda_cerrada'
+  | 'verificacion'
+  | 'reporte_resuelto'
+  | 'recordatorio'
+  | 'plan_propuesto'
+  | 'plan_aceptado'
+  | 'fase_entregada'
+  | 'fase_liberada'
+  | 'cambios_pedidos'
+  | 'pago_directo';
 
 export interface Aviso {
   id: string;
@@ -332,5 +378,33 @@ export interface Aviso {
   tipo: TipoAviso;
   texto: string;
   leido: boolean;
+  creado_en: string;
+}
+
+/** Una wallet de la cuenta. La cuenta es la persona: puede tener varias wallets. */
+export interface Wallet {
+  id: string;
+  usuario_id: string;
+  direccion: string;
+  /** Cómo se conectó: su propia wallet, Pollar (correo) o una llave de prueba. */
+  metodo: 'wallet' | 'pollar' | 'llave-prueba';
+  /** La wallet con la que se creó la cuenta (no se puede quitar). */
+  de_la_cuenta: boolean;
+  /** La wallet donde cobra por defecto (una por cuenta). */
+  para_cobrar: boolean;
+  agregada_en: string;
+}
+
+export type TipoComentario = 'idea' | 'error' | 'otro';
+
+/** «Enviar comentarios»: ideas y errores que llegan al equipo. */
+export interface Comentario {
+  id: string;
+  usuario_id: string | null;
+  tipo: TipoComentario;
+  texto: string;
+  contexto: string | null;
+  captura_ruta: string | null;
+  estado: 'nuevo' | 'visto' | 'resuelto';
   creado_en: string;
 }

@@ -1,16 +1,21 @@
 import { aparienciaDeAvatar, aparienciaDeUsuario, normalizarAparienciaCasa, type AparienciaPersona, type Barrio } from '@cryptoville/shared';
 import Phaser from 'phaser';
 import {
+  ALTO_CUADRO,
   ALTO_INTERIOR,
+  ANCHO_CUADRO,
   ANCHO_INTERIOR,
+  CUADROS_INTERIOR,
   DUENO_INTERIOR,
+  FOTO_CUADRO,
   JUGADOR_INTERIOR,
   PLACA_INTERIOR,
+  crearCuadro,
   crearInterior,
 } from '../../arte/casa';
 import { crearPersona } from '../../arte/persona';
 import { hashTexto } from '../../arte/svg';
-import { emitir, type DatosInterior } from '../EventBus';
+import { emitir, escuchar, type CuadroInterior, type DatosInterior } from '../EventBus';
 import { ALTO_JUGADOR, ANCHO_JUGADOR } from '../objects/Jugador';
 import { asegurarTextura, soltarTextura, texto, usarTextura } from '../texturas';
 import { resolucionTexturas } from '../zoom';
@@ -24,9 +29,12 @@ interface DatosEscena extends DatosInterior {
 /**
  * Interior del local (personalizable desde "Mi local"): piso, paredes, muebles y decoración.
  * El dueño está adentro mientras el panel del local está abierto; se sale con Esc o cerrando el panel.
+ * Si el dueño tiene proyectos destacados en su portafolio, se cuelgan como cuadros en la pared
+ * (en lugar de la decoración) y se abren al tocarlos.
  */
 export class Interior extends Phaser.Scene {
   private texturas: string[] = [];
+  private cuadros: Phaser.GameObjects.GameObject[] = [];
 
   constructor() {
     super('Interior');
@@ -34,7 +42,10 @@ export class Interior extends Phaser.Scene {
 
   create(datos: DatosEscena): void {
     const dpr = (this.registry.get('dpr') as number | undefined) ?? 1;
+    // La franja de «Modo de prueba» corre la barra superior hacia abajo.
+    const margen = (this.registry.get('margenSuperior') as number | undefined) ?? 0;
     const camara = this.cameras.main;
+    this.cuadros = [];
     camara.setBackgroundColor('#2f2724');
 
     // Zoom para que el cuarto quepa en el espacio que deja libre el panel de React:
@@ -43,7 +54,8 @@ export class Interior extends Phaser.Scene {
       const ancho = this.scale.width / dpr;
       const alto = this.scale.height / dpr;
       // Espacio libre en píxeles CSS (debajo de la barra superior).
-      const libre = ancho > 700 ? { x: 16, y: 76, ancho: ancho - 392, alto: alto - 92 } : { x: 0, y: 64, ancho, alto: alto * 0.45 - 64 };
+      const libre =
+        ancho > 700 ? { x: 16, y: 76 + margen, ancho: ancho - 392, alto: alto - 92 - margen } : { x: 0, y: 64 + margen, ancho, alto: alto * 0.45 - 64 - margen };
       const zoom = Math.max(0.35, Math.min(2.2, Math.min(libre.ancho / (ANCHO_INTERIOR + 40), libre.alto / (ALTO_INTERIOR + 40))));
       return { ancho, alto, libre, zoom };
     };
@@ -63,9 +75,47 @@ export class Interior extends Phaser.Scene {
     this.texturas.forEach(usarTextura);
 
     const activa = () => this.sys.isActive();
+    let cuarto: Phaser.GameObjects.Image | null = null;
+    let conCuadros = false;
     void asegurarTextura(this, claveCuarto, (t) => crearInterior({ barrio, apariencia: casa, color }, { tamano: t }), ANCHO_INTERIOR, ALTO_INTERIOR, R).then((ok) => {
-      if (ok && activa()) this.add.image(0, 0, claveCuarto).setOrigin(0).setScale(1 / R).setDepth(0);
+      if (ok && activa() && !conCuadros) cuarto = this.add.image(0, 0, claveCuarto).setOrigin(0).setScale(1 / R).setDepth(0);
     });
+
+    // Cuadros del portafolio: React los manda después de abrir el interior (se cargan aparte).
+    const colgar = (lista: CuadroInterior[]) => {
+      this.cuadros.forEach((o) => o.destroy());
+      this.cuadros = [];
+      if (!lista.length || !activa()) return;
+      // Con cuadros, la pared va sin su decoración para que no se encimen.
+      conCuadros = true;
+      const claveLisa = `${claveCuarto}:lisa`;
+      this.texturas.push(claveLisa);
+      usarTextura(claveLisa);
+      void asegurarTextura(this, claveLisa, (t) => crearInterior({ barrio, apariencia: casa, color }, { tamano: t, sinDecoracion: true }), ANCHO_INTERIOR, ALTO_INTERIOR, R).then((ok) => {
+        if (!ok || !activa()) return;
+        cuarto?.destroy();
+        cuarto = this.add.image(0, 0, claveLisa).setOrigin(0).setScale(1 / R).setDepth(0);
+      });
+      const claveMarco = `cuadro-marco@${R}`;
+      this.texturas.push(claveMarco);
+      usarTextura(claveMarco);
+      void asegurarTextura(this, claveMarco, (t) => crearCuadro(t), ANCHO_CUADRO, ALTO_CUADRO, R).then((ok) => {
+        if (!ok || !activa()) return;
+        lista.slice(0, CUADROS_INTERIOR.length).forEach((c, i) => {
+          const { x, y } = CUADROS_INTERIOR[i];
+          const marco = this.add.image(x, y, claveMarco).setOrigin(0).setScale(1 / R).setDepth(5);
+          marco.setInteractive({ useHandCursor: true }).on('pointerdown', () => emitir('abrir-proyecto', c.id));
+          const rotulo = texto(this, x + ANCHO_CUADRO / 2, y + ALTO_CUADRO + 9, c.titulo, { tamano: 9, peso: 700, color: '#3b2a25' }, R * 1.5)
+            .setDepth(6)
+            .setVisible(false);
+          while (rotulo.width > 92 && rotulo.text.length > 4) rotulo.setText(`${rotulo.text.slice(0, -2).trimEnd()}…`);
+          marco.on('pointerover', () => rotulo.setVisible(true)).on('pointerout', () => rotulo.setVisible(false));
+          this.cuadros.push(marco, rotulo);
+          if (c.foto) this.ponerFoto(c, x, y);
+        });
+      });
+    };
+    const quitarCuadros = escuchar('cuadros-interior', colgar);
     void asegurarTextura(this, claveDueno, (t) => crearPersona(dueno, { tamano: t }), ANCHO_JUGADOR, ALTO_JUGADOR, R).then((ok) => {
       if (!ok || !activa()) return;
       const sprite = this.add.image(DUENO_INTERIOR.x, DUENO_INTERIOR.y, claveDueno).setOrigin(0.5, 1).setScale(1 / R).setDepth(DUENO_INTERIOR.y);
@@ -89,11 +139,35 @@ export class Interior extends Phaser.Scene {
     ajustar();
     this.scale.on('resize', ajustar);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      quitarCuadros();
       this.scale.off('resize', ajustar);
       this.texturas.forEach((t) => soltarTextura(this, t));
       this.texturas = [];
+      this.cuadros = [];
     });
 
     this.input.keyboard?.on('keydown-ESC', () => emitir('salio-del-local'));
+  }
+
+  /** La foto del proyecto, recortada para llenar el hueco del marco (si no carga, queda el dibujo del marco). */
+  private ponerFoto(c: CuadroInterior, x: number, y: number): void {
+    const clave = `foto-proyecto:${c.id}`;
+    const dibujar = () => {
+      if (!this.sys.isActive() || !this.textures.exists(clave)) return;
+      const img = this.add.image(x + FOTO_CUADRO.x, y + FOTO_CUADRO.y, clave).setOrigin(0).setDepth(5.5);
+      const fuente = this.textures.get(clave).getSourceImage() as HTMLImageElement;
+      const escala = Math.max(FOTO_CUADRO.ancho / fuente.width, FOTO_CUADRO.alto / fuente.height);
+      const recorteX = (fuente.width - FOTO_CUADRO.ancho / escala) / 2;
+      const recorteY = (fuente.height - FOTO_CUADRO.alto / escala) / 2;
+      img.setScale(escala).setCrop(recorteX, recorteY, FOTO_CUADRO.ancho / escala, FOTO_CUADRO.alto / escala);
+      img.setPosition(x + FOTO_CUADRO.x - recorteX * escala, y + FOTO_CUADRO.y - recorteY * escala);
+      img.setInteractive({ useHandCursor: true }).on('pointerdown', () => emitir('abrir-proyecto', c.id));
+      this.cuadros.push(img);
+    };
+    if (this.textures.exists(clave)) return dibujar();
+    this.load.setCORS('anonymous');
+    this.load.image(clave, c.foto!);
+    this.load.once(`filecomplete-image-${clave}`, dibujar);
+    this.load.start();
   }
 }
