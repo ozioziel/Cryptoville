@@ -13,6 +13,13 @@
 #                     restringida a deploy/ci-deploy.sh)
 #   VPS_KNOWN_HOSTS   huella del servidor (salida de: ssh-keyscan 144.22.43.169)
 # Y opcionalmente la variable URL_PUBLICA (http://144.22.43.169:6702) para la comprobación final.
+#
+# MAINNET (preparado, NO activo): el job "desplegar-mainnet" solo corre a mano, eligiendo destino "mainnet",
+# si existe la variable de repositorio MAINNET_ACTIVO=si y con la aprobación del Environment "mainnet"
+# (Settings -> Environments -> mainnet -> Required reviewers). Usa sus propios secrets:
+#   MAINNET_VPS_HOST, MAINNET_VPS_USER, MAINNET_VPS_SSH_KEY, MAINNET_VPS_KNOWN_HOSTS
+# y la variable MAINNET_URL_PUBLICA. Antes de desplegar, el servidor corre la revisión de mainnet:
+# si falta algo, no despliega. La lista completa está en docs/mainnet.md.
 name: Deploy
 
 on:
@@ -21,6 +28,12 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
+    inputs:
+      destino:
+        description: 'Dónde desplegar (mainnet necesita MAINNET_ACTIVO=si y aprobación)'
+        type: choice
+        options: [testnet, mainnet]
+        default: testnet
 
 # Nunca dos despliegues al mismo tiempo; si llega otro, espera su turno.
 concurrency:
@@ -34,7 +47,7 @@ jobs:
   desplegar:
     name: Desplegar en el VPS
     if: >-
-      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.destino != 'mainnet') ||
       (github.event_name == 'workflow_run' &&
        github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
@@ -75,3 +88,51 @@ jobs:
       - name: Borrar la llave del runner
         if: always()
         run: rm -f ~/.ssh/cryptoville_actions
+
+  # Preparado para mainnet, pero apagado: no corre si no existe MAINNET_ACTIVO=si (ver docs/mainnet.md).
+  desplegar-mainnet:
+    name: Desplegar en mainnet (manual)
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      inputs.destino == 'mainnet' &&
+      vars.MAINNET_ACTIVO == 'si'
+    runs-on: ubuntu-latest
+    # El Environment "mainnet" debe pedir la aprobación de alguien del equipo antes de seguir.
+    environment: mainnet
+    timeout-minutes: 45
+    steps:
+      - name: Preparar la conexión SSH
+        env:
+          LLAVE: ${{ secrets.MAINNET_VPS_SSH_KEY }}
+          HUELLAS: ${{ secrets.MAINNET_VPS_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$LLAVE" ] || [ -z "$HUELLAS" ]; then
+            echo "::error::Faltan los secrets MAINNET_VPS_SSH_KEY o MAINNET_VPS_KNOWN_HOSTS (ver docs/mainnet.md)"
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$LLAVE" > ~/.ssh/cryptoville_mainnet
+          chmod 600 ~/.ssh/cryptoville_mainnet
+          printf '%s\n' "$HUELLAS" > ~/.ssh/known_hosts
+
+      - name: Desplegar (deploy/ci-deploy.sh en el servidor de mainnet)
+        env:
+          VPS_HOST: ${{ secrets.MAINNET_VPS_HOST }}
+          VPS_USER: ${{ secrets.MAINNET_VPS_USER }}
+        # La API no arranca en mainnet si la configuración no pasa la revisión (revision-mainnet.ts),
+        # así que un .env incompleto no llega a atender a nadie.
+        run: |
+          ssh -i ~/.ssh/cryptoville_mainnet \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o ServerAliveInterval=30 \
+            "$VPS_USER@$VPS_HOST"
+
+      - name: Comprobar desde internet
+        if: vars.MAINNET_URL_PUBLICA != ''
+        run: curl -fsS --retry 10 --retry-delay 6 --retry-all-errors "${{ vars.MAINNET_URL_PUBLICA }}/api/health"
+
+      - name: Borrar la llave del runner
+        if: always()
+        run: rm -f ~/.ssh/cryptoville_mainnet

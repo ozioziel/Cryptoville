@@ -24,7 +24,9 @@
     "db:reset": "supabase db reset --no-seed && npm run db:migrate && npm run db:seed",
     "seed:keys": "node scripts/generate-seed-keys.mjs",
     "map:generate": "node scripts/generate-map.mjs",
-    "contract:build": "node scripts/run-build-contract.mjs"
+    "contract:build": "node scripts/run-build-contract.mjs",
+    "mainnet:revisar": "npm run build -w @cryptoville/shared && npm run revisar:mainnet -w @cryptoville/api",
+    "datos:prueba": "npm run build -w @cryptoville/shared && node scripts/datos-de-prueba.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
