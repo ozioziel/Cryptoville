@@ -1,6 +1,7 @@
-import { ACCIONES, enlaceTransaccion, permiteResena, puedeVerificar, type DefinicionAccion } from '@cryptoville/shared';
+import { ACCIONES, ETIQUETA_ACCION, enlaceExplorador, enlaceTransaccion, permiteResena, puedeVerificar, type DefinicionAccion, type Parte } from '@cryptoville/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSesion } from '../../features/auth/sesion';
+import { FirmarEnApp } from '../../features/escrow/FirmarEnApp';
 import { PasoEnLab } from '../../features/escrow/PasoEnLab';
 import { accionesPara, rolEnPedido } from '../../features/escrow/pasos';
 import { cargarPedido, type PedidoDetalle } from '../../features/orders/datos';
@@ -9,6 +10,9 @@ import { obtenerConfig } from '../../lib/config';
 import { useEstado } from '../estado';
 import { Aviso, Avatar, Cargando, EstadoPedidoBadge, fechaCorta } from '../components/basicos';
 import { Icono } from '../components/Iconos';
+import { BotonReportar, Nombre } from '../components/Confianza';
+import { PedidoV2 } from '../pagos/PedidoV2';
+import { NOMBRE_METODO, type MetodoPago } from '@cryptoville/shared';
 
 const ROL_TEXTO = { cliente: 'Eres el cliente', proveedor: 'Eres el proveedor', arbitro: 'Eres el árbitro' } as const;
 
@@ -37,7 +41,11 @@ export function PanelPedido({ id }: { id: string }) {
 
   const rol = rolEnPedido(pedido, usuario.id, usuario.rol === 'arbitro');
   if (!rol) return <Aviso tipo="peligro">No participas en este pedido.</Aviso>;
-  const acciones = accionesPara(pedido, rol, config.plazo_revision_seg);
+  // Contrato v2 (por etapas, garantía v2 y pago directo): aquí solo aceptar y cancelar; lo demás va en PedidoV2.
+  const esV2 = pedido.contrato === 'v2';
+  const acciones = accionesPara(pedido, rol, config.plazo_revision_seg).filter(
+    ({ def }) => !esV2 || def.accion === 'cancelar' || (def.accion === 'aceptar' && pedido.metodo_pago !== 'etapas'),
+  );
   const otro = rol === 'cliente' ? pedido.proveedor : pedido.cliente;
   const yaResene = pedido.resenas.some((r) => r.autor_id === usuario.id);
 
@@ -56,6 +64,9 @@ export function PanelPedido({ id }: { id: string }) {
           <span className="tenue pequeno">
             Pedido #{pedido.numero} · {ROL_TEXTO[rol]}
           </span>
+          {pedido.metodo_pago && pedido.metodo_pago !== 'garantia' && (
+            <span className={`chip ${pedido.metodo_pago === 'directo' ? 'chip-oro' : 'chip-info'}`}>{NOMBRE_METODO[pedido.metodo_pago as MetodoPago]}</span>
+          )}
           {pedido.servicio.busqueda_id && (
             <button type="button" className="chip chip-oro chip-boton" onClick={() => abrir({ tipo: 'busqueda', id: pedido.servicio.busqueda_id! })}>
               <Icono nombre="chincheta" tamano={13} /> Nació de un «Se busca»
@@ -70,11 +81,13 @@ export function PanelPedido({ id }: { id: string }) {
         <dd className="precio">{pedido.monto_usdc} USDC</dd>
         <dt>Cliente</dt>
         <dd className="fila">
-          <Avatar frame={pedido.cliente.avatar} apariencia={pedido.cliente.apariencia} tamano={24} /> {pedido.cliente.nombre}
+          <Avatar frame={pedido.cliente.avatar} apariencia={pedido.cliente.apariencia} tamano={24} />{' '}
+          <Nombre nombre={pedido.cliente.nombre} verificado={pedido.cliente.verificado} />
         </dd>
         <dt>Proveedor</dt>
         <dd className="fila">
-          <Avatar frame={pedido.proveedor.avatar} apariencia={pedido.proveedor.apariencia} tamano={24} /> {pedido.proveedor.nombre}
+          <Avatar frame={pedido.proveedor.avatar} apariencia={pedido.proveedor.apariencia} tamano={24} />{' '}
+          <Nombre nombre={pedido.proveedor.nombre} verificado={pedido.proveedor.verificado} />
         </dd>
         <dt>Fecha límite</dt>
         <dd>{fechaCorta(pedido.fecha_limite)}</dd>
@@ -82,7 +95,7 @@ export function PanelPedido({ id }: { id: string }) {
       <p className="cita">{pedido.detalle}</p>
 
       <h3>Qué sigue</h3>
-      {acciones.length === 0 && <p className="tenue">{textoEspera(pedido, rol)}</p>}
+      {acciones.length === 0 && !esV2 && <p className="tenue">{textoEspera(pedido, rol)}</p>}
       {acciones.map(({ def, bloqueada }) => (
         <div key={def.accion} className="accion">
           <button
@@ -92,7 +105,7 @@ export function PanelPedido({ id }: { id: string }) {
             onClick={() => setAbierta(abierta === def.accion ? null : def.accion)}
             aria-expanded={abierta === def.accion}
           >
-            {def.etiqueta} {def.enCadena && <span className="badge badge-info">Stellar Lab</span>}
+            {def.etiqueta} {def.enCadena && <span className="badge badge-info">{config.firma_en_app ? 'En la red' : 'Stellar Lab'}</span>}
           </button>
           {bloqueada && <span className="tenue pequeno">{bloqueada}</span>}
           {abierta === def.accion && (
@@ -101,19 +114,32 @@ export function PanelPedido({ id }: { id: string }) {
         </div>
       ))}
 
+      {esV2 && <PedidoV2 pedido={pedido} rol={rol} onListo={(t) => void tras(t)} />}
+
       <h3>Historial</h3>
       <ol className="historial">
         {pedido.pasos.map((p) => {
           const quien = p.declarado_por === pedido.cliente_id ? pedido.cliente.nombre : p.declarado_por === pedido.proveedor_id ? pedido.proveedor.nombre : 'Árbitro';
           return (
             <li key={p.id}>
-              <strong>{ACCIONES[p.accion].etiqueta}</strong> <span className="tenue">· {quien} · {fechaCorta(p.creado_en)}</span>
+              <strong>
+                {ETIQUETA_ACCION[p.accion] ?? p.accion}
+                {p.fase != null ? ' (fase ' + (p.fase + 1) + ')' : ''}
+              </strong>{' '}
+              <span className="tenue">· {quien} · {fechaCorta(p.creado_en)}</span>
               {p.hash && (
                 <div className="fila pequeno">
                   <a href={enlaceTransaccion(p.hash, config.red)} target="_blank" rel="noreferrer">
                     Ver transacción en Stellar Lab <Icono nombre="enlace" tamano={14} />
                   </a>
-                  {p.verificado_por ? (
+                  <a href={enlaceExplorador('tx', p.hash, config.red)} target="_blank" rel="noreferrer noopener">
+                    Explorador
+                  </a>
+                  {p.en_cadena ? (
+                    <span className="badge badge-exito" title="Cryptoville leyó la transacción en la red y coincide con el pedido">
+                      Verificada en la red
+                    </span>
+                  ) : p.verificado_por ? (
                     <span className="badge badge-exito">Verificada</span>
                   ) : puedeVerificar(p.declarado_por, usuario.id, rol) ? (
                     <BotonVerificar pedidoId={pedido.id} pasoId={p.id} onListo={() => tras('Paso verificado')} onError={setError} />
@@ -188,7 +214,7 @@ function AccionAbierta({
   onError: (e: string | null) => void;
 }) {
   if (def.enCadena) {
-    return <PasoEnLab pedido={pedido} def={def} miDireccion={miDireccion} onListo={() => onListo(`Paso registrado: ${def.etiqueta}`)} />;
+    return <PasoDelContrato pedido={pedido} def={def} miDireccion={miDireccion} onListo={onListo} />;
   }
   if (def.accion === 'aceptar') return <FormularioAceptar pedido={pedido} onListo={() => onListo('Pedido aceptado')} onError={onError} />;
   return (
@@ -209,6 +235,75 @@ function AccionAbierta({
       >
         Sí, cancelar el pedido
       </button>
+    </div>
+  );
+}
+
+/**
+ * Un paso del contrato: se firma dentro de la app (si el servidor lo permite) o, como opción avanzada, en Stellar Lab.
+ * El motivo de una disputa y la decisión del árbitro se escriben aquí en los dos casos.
+ */
+function PasoDelContrato({
+  pedido,
+  def,
+  miDireccion,
+  onListo,
+}: {
+  pedido: PedidoDetalle;
+  def: DefinicionAccion;
+  miDireccion: string;
+  onListo: (texto: string) => void;
+}) {
+  const config = obtenerConfig();
+  const [motivo, setMotivo] = useState('');
+  const [decision, setDecision] = useState('');
+  const [aFavorDe, setAFavorDe] = useState<Parte>('Cliente');
+  if (!config.firma_en_app) {
+    return <PasoEnLab pedido={pedido} def={def} miDireccion={miDireccion} onListo={() => onListo(`Paso registrado: ${def.etiqueta}`)} />;
+  }
+  const faltaTexto =
+    (def.accion === 'abrir_disputa' && motivo.trim().length < 10) || (def.accion === 'resolver' && decision.trim().length < 10);
+  return (
+    <div className="paso-lab">
+      <p>{def.ayuda}</p>
+      {def.accion === 'abrir_disputa' && (
+        <>
+          <label className="etiqueta" htmlFor="motivo-app">
+            Motivo de la disputa (lo lee el árbitro)
+          </label>
+          <textarea id="motivo-app" className="campo" rows={3} maxLength={1000} value={motivo} onChange={(e) => setMotivo(e.target.value)} />
+        </>
+      )}
+      {def.accion === 'resolver' && (
+        <>
+          <label className="etiqueta" htmlFor="a-favor">
+            A favor de
+          </label>
+          <select id="a-favor" className="campo" value={aFavorDe} onChange={(e) => setAFavorDe(e.target.value as Parte)}>
+            <option value="Cliente">Cliente ({pedido.cliente.nombre})</option>
+            <option value="Proveedor">Proveedor ({pedido.proveedor.nombre})</option>
+          </select>
+          <label className="etiqueta" htmlFor="decision-app">
+            Explicación de la decisión (la ven las dos partes)
+          </label>
+          <textarea id="decision-app" className="campo" rows={3} maxLength={1000} value={decision} onChange={(e) => setDecision(e.target.value)} />
+        </>
+      )}
+      <FirmarEnApp
+        pedidoId={pedido.id}
+        accion={def.accion}
+        etiqueta={def.etiqueta}
+        deshabilitado={faltaTexto}
+        extra={{
+          ...(def.accion === 'abrir_disputa' ? { motivo } : {}),
+          ...(def.accion === 'resolver' ? { decision, a_favor_de: aFavorDe } : {}),
+        }}
+        onListo={() => onListo(`Paso hecho: ${def.etiqueta}`)}
+      />
+      <details className="pequeno">
+        <summary>Avanzado: hacerlo en Stellar Lab</summary>
+        <PasoEnLab pedido={pedido} def={def} miDireccion={miDireccion} onListo={() => onListo(`Paso registrado: ${def.etiqueta}`)} />
+      </details>
     </div>
   );
 }
@@ -324,6 +419,7 @@ function Chat({ pedido, usuarioId, rol, onError }: { pedido: PedidoDetalle; usua
               {nombre(m.autor_id)} · {fechaCorta(m.creado_en)}
             </span>
             <p>{m.texto}</p>
+            {m.autor_id !== usuarioId && <BotonReportar tipo="mensaje" objetoId={m.id} nombre={'un mensaje de ' + nombre(m.autor_id)} />}
           </li>
         ))}
         {pedido.mensajes.length === 0 && <li className="tenue">Todavía no hay mensajes.</li>}

@@ -1,8 +1,9 @@
-import { comisionUnidades, unidadesAUsdc, usdcAUnidades } from '@cryptoville/shared';
+import { comisionDeMetodo, comisionUnidades, porcentajeBps, unidadesAUsdc, usdcAUnidades, type MetodoPago } from '@cryptoville/shared';
 import { useState } from 'react';
+import { MetodosDePago } from '../pagos/MetodosDePago';
 import { useSesion } from '../../features/auth/sesion';
 import { api, mensajeDeError } from '../../lib/api';
-import { obtenerConfig } from '../../lib/config';
+import { obtenerConfig, reglas } from '../../lib/config';
 import { useEstado } from '../estado';
 import { Aviso, Avatar, Garantia } from '../components/basicos';
 
@@ -15,18 +16,21 @@ export function PanelServicio({ servicioId }: { servicioId: string }) {
   const [detalle, setDetalle] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
+  const [metodo, setMetodo] = useState<MetodoPago>('garantia');
   const config = obtenerConfig();
 
   if (!local || !servicio) return <p className="tenue">Este servicio ya no está disponible.</p>;
 
-  const comision = unidadesAUsdc(comisionUnidades(usdcAUnidades(servicio.precio_usdc), config.comision_bps));
+  const conV2 = Boolean(config.contrato_v2_id);
+  const bps = conV2 ? comisionDeMetodo(metodo, reglas()) : config.comision_bps;
+  const comision = unidadesAUsdc(comisionUnidades(usdcAUnidades(servicio.precio_usdc), bps));
   const esMio = usuario?.id === local.usuario_id;
 
   const pedir = async () => {
     setError(null);
     setEnviando(true);
     try {
-      const pedido = await api<{ id: string }>('/pedidos', { cuerpo: { servicio_id: servicio.id, detalle } });
+      const pedido = await api<{ id: string }>('/pedidos', { cuerpo: { servicio_id: servicio.id, detalle, metodo_pago: metodo } });
       abrir({ tipo: 'pedido', id: pedido.id });
     } catch (e) {
       setError(mensajeDeError(e));
@@ -49,9 +53,16 @@ export function PanelServicio({ servicioId }: { servicioId: string }) {
       <p>{servicio.descripcion}</p>
       <p className="tenue pequeno">
         Entrega en {servicio.dias_entrega} días. El proveedor recibe {servicio.precio_usdc} USDC menos la comisión de Cryptoville (
-        {config.comision_bps / 100}% ≈ {comision} USDC) cuando liberes el pago.
+        {porcentajeBps(bps)} ≈ {comision} USDC)
+        {metodo === 'directo' ? ' en el momento del pago.' : metodo === 'etapas' ? ' en partes, al aprobar cada fase.' : ' cuando liberes el pago.'}
       </p>
-      <Garantia />
+      {!conV2 && <Garantia />}
+      {!esMio && (
+        <>
+          <span className="etiqueta">¿Cómo quieres pagar?</span>
+          <MetodosDePago valor={metodo} onCambiar={setMetodo} reputacion={local.reputacion} />
+        </>
+      )}
       {esMio ? (
         <Aviso>Este servicio es tuyo.</Aviso>
       ) : usuario ? (
@@ -75,7 +86,7 @@ export function PanelServicio({ servicioId }: { servicioId: string }) {
         </>
       ) : (
         <button type="button" className="boton boton-primario" onClick={() => abrir({ tipo: 'bienvenida' })}>
-          Entra con tu wallet para pedirlo
+          Entra para pedirlo
         </button>
       )}
       {error && <Aviso tipo="peligro">{error}</Aviso>}
