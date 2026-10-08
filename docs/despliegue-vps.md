@@ -130,6 +130,8 @@ Si el servidor es de otra persona y ya tiene servicios en los puertos 80 y 443:
 
 `deploy.yml` entra al VPS por SSH con una llave **exclusiva**. En `~/.ssh/authorized_keys`, esa llave está restringida para que solo pueda ejecutar `deploy/ci-deploy.sh`. Ese script deja el servidor igual a `main` y ejecuta `deploy/deploy.sh`.
 
+> **Mainnet (preparado, apagado):** `deploy.yml` también trae el job `desplegar-mainnet`. Solo corre a mano (*Actions → Deploy → Run workflow*, destino `mainnet`), si existe la variable de repositorio `MAINNET_ACTIVO=si` y después de que alguien apruebe el Environment `mainnet`. Usa sus propios secrets (`MAINNET_VPS_HOST`, `MAINNET_VPS_USER`, `MAINNET_VPS_SSH_KEY`, `MAINNET_VPS_KNOWN_HOSTS`) y otro servidor. En el servidor, la API no arranca si el `.env` no pasa la revisión de mainnet. Pasos completos: [mainnet.md](mainnet.md).
+
 ### Configuración (una sola vez)
 
 1. **En tu PC**, genera la llave y deja la frase en blanco (presiona Enter dos veces):

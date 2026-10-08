@@ -31,7 +31,8 @@ Las plataformas que resuelven esto cobran comisiones altas, retienen el dinero d
 - **Arbitraje del equipo de Cryptoville,** que únicamente puede resolver a favor de una de las partes, nunca quedarse con el dinero.
 - **Reputación verificada:** reseñas que solo puede dejar quien pagó de verdad, con el pago comprobable en Stellar.
 - **Cobro inmediato** cuando el trabajo se confirma, sin esperar semanas.
-- **Comisiones bajas:** 3% para Cryptoville y fracciones de centavo de la red Stellar.
+- **Comisiones bajas:** 1% en el pago directo, 3% con garantía o por etapas, y fracciones de centavo de la red Stellar.
+- **Pagos por etapas:** el trabajo se divide en fases (qué parte del proyecto y qué parte del pago), se acuerdan antes de pagar y cada fase se cobra al aprobar su prueba.
 - **Pagos sin fronteras:** un cliente en un país paga a un proveedor en otro sin bancos de por medio.
 - **Una forma agradable de descubrir servicios:** un mundo para explorar, en computadora o celular, donde cada proveedor tiene un local con personalidad: arma su casa por fuera y por dentro, y cada persona elige cómo se ve su personaje.
 
@@ -69,6 +70,18 @@ Los avisos de propuestas nuevas, elegidas o no elegidas llegan a la campana.
 - El siguiente espacio libre aparece como «Lote disponible».
 - Los personajes son personas en vectores. Se combinan libremente tono de piel, peinado, color de pelo, barba, ropa, zapatos, lentes, gorros y un objeto en la mano.
 
+## Cómo se paga (v2)
+
+Antes de pedir un servicio eliges una de tres tarjetas:
+
+| Forma | Cómo funciona | Comisión |
+|---|---|---|
+| **Pagar directo** | Le pagas al proveedor en el momento. Sin garantía ni árbitro: la tarjeta avisa en ámbar «¿Confías en esta persona?» y muestra su reputación | 1% |
+| **Pagar con garantía** | El contrato guarda el dinero hasta que confirmas la entrega | 3% |
+| **Por etapas** | El proveedor propone las fases (2 a 5): qué incluye cada una, qué parte del proyecto y del pago, la fecha y las pruebas. Tú lo aceptas o pides cambios **antes de pagar**. Después, en cada fase, el proveedor sube su prueba y tú tienes 3 días para liberarla o pedir cambios | 3% de cada fase |
+
+El avance se ve como un camino de puntos, uno por fase, con el color de su estado. Todo se firma dentro de la app con tu wallet (o con tu cuenta de correo).
+
 ## Cómo funciona el pago en garantía
 
 | Situación | Quién actúa | Resultado |
@@ -77,6 +90,19 @@ Los avisos de propuestas nuevas, elegidas o no elegidas llegan a la campana.
 | El proveedor no entregó a tiempo | El cliente se reembolsa al vencer la fecha límite | El dinero vuelve al cliente |
 | El cliente no responde | El proveedor cobra al vencer el plazo de revisión (3 días) | El dinero va al proveedor |
 | Hay un desacuerdo | Cualquiera abre una disputa y Cryptoville resuelve | El dinero va a quien tenga la razón |
+
+## Confianza
+
+- **Verificación de identidad (KYC):** quien abre un local, cobra o deja reseñas verifica su identidad una vez. Una persona tiene una sola cuenta (con varias wallets si quiere). Las personas verificadas llevan la insignia ✔ junto a su nombre.
+- **Reportar y bloquear:** cualquier contenido o persona se puede reportar; el equipo lo revisa. Bloquear a alguien impide que te hable o te mande pedidos y propuestas.
+- **Avisos:** en la app, por correo y en el navegador.
+
+## Comunidad
+
+- **Varios locales:** hasta 3 gratis por persona; los siguientes se pagan una sola vez.
+- **Sectores:** cada villa tiene 60 casas; después se abre «Creativo B», «Creativo C»…
+- **Portafolio:** experiencia previa y proyectos con fotos, enlaces y videos. Los destacados cuelgan como cuadros en la pared de tu local y se pueden adjuntar a tus propuestas.
+- **Personas en línea:** ves a quienes están en tu villa, con su nombre sobre la cabeza. Si te acercas a alguien, aparece «Hablar con… [H]» y se abre un chat con globo sobre la cabeza.
 
 ## Cómo funciona la reputación
 
@@ -87,11 +113,11 @@ Los avisos de propuestas nuevas, elegidas o no elegidas llegan a la campana.
 
 ## Cómo funciona para el usuario
 
-1. Conectas tu wallet de Stellar y ya tienes cuenta, sin correos ni contraseñas.
+1. Entras con tu correo o conectas tu wallet de Stellar, y ya tienes cuenta (sin contraseñas).
 2. Si ofreces algo, abres tu local en una de las cuatro villas (Creativo, Tech, Audiovisual o Academy), eliges su categoría, decoras tu casa y publicas tus servicios y precios.
 3. Si buscas algo, recorres las villas o usas «Quiero contratar» (por texto, villa, categoría y precio), y revisas la reputación de cada proveedor. Si no lo encuentras, publicas un «Se busca» y eliges entre las propuestas que te lleguen.
 4. Pides el servicio y el proveedor acepta el precio y la fecha de entrega.
-5. Pagas en garantía desde Stellar Lab y el dinero queda retenido en el contrato.
+5. Eliges cómo pagar (directo, con garantía o por etapas) y firmas dentro de la app; con garantía o por etapas, el dinero queda retenido en el contrato.
 6. Hablan por el chat del pedido y el proveedor entrega.
 7. Confirmas y el proveedor cobra.
 8. Dejas una reseña que suma a su reputación.
@@ -107,4 +133,6 @@ Los avisos de propuestas nuevas, elegidas o no elegidas llegan a la campana.
 
 ## Estado actual
 
-Primera versión en **testnet** (dinero de prueba), con 5 usuarios de ejemplo repartidos en las cuatro villas, para mostrar el flujo completo: publicar, contratar, pagar en garantía, entregar, liberar el pago y reseñar. El contrato se despliega y se usa desde **Stellar Lab**, donde también se revisan los pagos.
+Primera versión en **testnet** (dinero de prueba), con 5 usuarios de ejemplo repartidos en las cuatro villas, para mostrar el flujo completo: publicar, contratar, pagar en garantía, entregar, liberar el pago y reseñar. Los contratos se despliegan desde **Stellar Lab**.
+
+La **v2** está preparada para mainnet, pero todavía no se lanzó: falta la auditoría del contrato v2, la revisión legal y la configuración de las cuentas reales ([lista](mainnet.md)).

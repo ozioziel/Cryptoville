@@ -8,17 +8,25 @@ Funciona para los dos lados con un interruptor arriba al centro, que cambia el *
 - **«Quiero contratar»:** las casas son los locales de los proveedores.
 - **«Quiero trabajar»:** las mismas villas muestran una casa por cada cartel **«Se busca»** (lo que alguien necesita). Entras y mandas tu propuesta. El pago queda **en garantía en un contrato inteligente de Soroban**: se libera al proveedor cuando confirmas, o vuelve a ti si no entrega. Si hay un desacuerdo, el equipo de Cryptoville actúa como árbitro. Cada usuario construye su **reputación** con reseñas ligadas a pagos reales.
 
-Primera versión en **testnet**. El contrato se despliega y se usa **solo desde [Stellar Lab](https://lab.stellar.org)**: la app no se conecta a servidores de Stellar.
+**Novedades de la v2** (preparada para mainnet, todavía en **testnet**):
+- **Tres formas de pagar:** directo (1%), con garantía (3%) o **por etapas** (3% por fase), con un plan de fases que se acuerda antes de pagar y una prueba por cada fase.
+- **Firmar dentro de la app:** con tu wallet (también por QR) o entrando con Google o tu correo. La API verifica cada pago en la red; Stellar Lab queda como respaldo.
+- **Para quien no conoce cripto:** pagar con el QR de tu banco y pasar tu saldo a tu banco. En testnet es una rampa **simulada** ([qué está simulado](docs/simulaciones.md)).
+- **Confianza:** verificación de identidad (KYC, insignia ✔), varias wallets en una sola cuenta, reportar y bloquear, avisos por correo y en el navegador.
+- **Comunidad:** varios locales por persona, sectores «Creativo B», «C»…, portafolio con cuadros en la pared de tu local, personas en línea caminando por la villa y chat por cercanía.
+
+Primera versión en **testnet** (aparece la franja «Modo de prueba: el dinero no es real»). Qué falta para mainnet: [docs/mainnet.md](docs/mainnet.md).
 
 ## Cómo está hecho
 
 | Parte | Tecnología | Carpeta |
 |---|---|---|
-| Contrato de escrow + token «USDC de prueba» | Rust + Soroban SDK 28 | `contracts/` |
-| Web: villas 2D y paneles | React 19 + Vite + Phaser 3 (arte vectorial en SVG) + Stellar Wallets Kit | `apps/web/` |
-| API | NestJS 11 + Prisma 7 | `apps/api/` |
+| Contratos: escrow v1, escrow v2 (fases y pago directo) y token «USDC de prueba» | Rust + Soroban SDK 28 | `contracts/` |
+| Web: villas 2D y paneles | React 19 + Vite + Phaser 3 (arte vectorial en SVG) + Stellar Wallets Kit + Pollar | `apps/web/` |
+| API | NestJS 11 + Prisma 7, lee la red con el RPC de Stellar | `apps/api/` |
+| Servicios externos (opcionales) | Didit (KYC), Mux (videos), Resend (correo), Web Push, WalletConnect, Pollar | se encienden con sus variables |
 | Base de datos, tiempo real y fotos | Supabase (Postgres + RLS, Realtime, Storage) | migraciones en `apps/api/prisma/` |
-| Código compartido | TypeScript: estados del pedido, contrato, enlaces al Lab, villas y categorías, catálogo de personajes y casas, datos curiosos | `packages/shared/` |
+| Código compartido | TypeScript: estados del pedido, contrato, enlaces al Lab, villas y categorías, catálogo de personajes y casas, datos curiosos, **archivo de reglas** (`reglas.ts`), pagos por fases, documentos legales y portafolio | `packages/shared/` |
 | Despliegue | Docker Compose + Caddy + sslip.io (VPS Ubuntu, también ARM) | `deploy/` |
 
 **Regla de datos:** la web **lee** de Supabase (llave pública + RLS) y **escribe** a través de la API.
@@ -29,6 +37,8 @@ Documentación:
 - [Guía de Stellar Lab](docs/guia-stellar-lab.md)
 - [Guía de Supabase](docs/guia-supabase.md)
 - [Despliegue en el VPS](docs/despliegue-vps.md)
+- [Contrato v2 (para el auditor)](docs/contrato-v2.md)
+- [Pasar a mainnet](docs/mainnet.md)
 - [Roadmap](docs/roadmap.md)
 
 ## Correrlo en tu PC
@@ -46,7 +56,9 @@ npm run dev
 
 Abre <http://localhost:5173>.
 
-**Para entrar:** con Freighter en testnet o, en modo desarrollo, con la opción *«entrar con una llave de prueba»*. En ese caso pega la llave secreta de un usuario de `.seed-keys.json`.
+**Para entrar:** con Google o tu correo (si `POLLAR_API_KEY` está configurada), con Freighter u otra wallet en testnet (también por QR con WalletConnect) o, en modo desarrollo, con la opción *«entrar con una llave de prueba»*. En ese caso pega la llave secreta de un usuario de `.seed-keys.json`.
+
+Sin las llaves de los servicios externos (Didit, Mux, Pollar, Resend, VAPID, WalletConnect) la app funciona igual y oculta esas funciones. Para el contrato v2 hace falta `ESCROW_V2_CONTRACT_ID` ([guía](docs/guia-stellar-lab.md#contrato-v2)).
 
 | Comando | Qué hace |
 |---|---|
@@ -57,6 +69,7 @@ Abre <http://localhost:5173>.
 | `npm run db:reset` | Borra la base local y la vuelve a crear con los datos de ejemplo |
 | `npm run map:generate` | Regenera el mapa del pueblo anterior (`apps/web/public/assets/mapas/pueblo.json`, editable en [Tiled](https://www.mapeditor.org/)). Las villas nuevas no lo usan: su plano está en `apps/web/src/game/plano.ts` |
 | `npm run supabase:stop` | Apaga Supabase local |
+| `npm run mainnet:revisar` | Revisa el `.env` como si fuera mainnet y dice qué falta |
 
 ## Desplegar
 
@@ -77,7 +90,9 @@ Abre <http://localhost:5173>.
 - La llave `service_role` de Supabase solo existe en la API.
 - RLS impide que la web escriba directamente en cualquier tabla.
 - El inicio de sesión es una firma SEP-53 de la wallet, verificada sin conectarse a la red. No hay contraseñas.
-- El servidor nunca firma transacciones ni guarda llaves de los usuarios.
+- El servidor nunca firma transacciones de los usuarios ni guarda sus llaves: arma la transacción, la wallet la firma y la API comprueba que sea la misma antes de enviarla. La única llave del servidor es la de mantenimiento, que solo ejecuta vencimientos y renueva pedidos del contrato v2 (siempre a favor de quien corresponde).
+- Cada pago se verifica leyendo la red: un hash falso o de otra transacción se rechaza.
+- En mainnet la API no arranca si queda algo de prueba en la configuración.
 - `.env` y `.seed-keys.json` están en `.gitignore`. Las llaves de ejemplo son **solo para testnet**.
 
 ## Licencia

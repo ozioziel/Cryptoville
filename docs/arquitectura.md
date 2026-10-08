@@ -1,4 +1,6 @@
-# Arquitectura de Cryptoville (v1)
+# Arquitectura de Cryptoville (v1 y v2)
+
+> Las secciones de arriba describen la **v1** y siguen valiendo. Lo nuevo de la **v2** (firmar en la app, contrato v2, confianza, pagos por fases, varios locales, sectores, portafolio y personas en línea) está en [v2: qué cambió](#v2-qué-cambió), al final.
 
 ## Resumen
 
@@ -17,7 +19,7 @@
  └───────────────────────────┘   └─────────────────────────┘
 ```
 
-La app **no se conecta a Stellar**. Quien hace un paso lo firma en el Lab y pega el hash en la app; la otra parte lo revisa en el Lab y lo marca como verificado.
+En la **v1** la app **no se conecta a Stellar**: quien hace un paso lo firma en el Lab y pega el hash en la app; la otra parte lo revisa en el Lab y lo marca como verificado. En la **v2** la API sí lee la red (RPC): arma las transacciones para firmar en la app y verifica cada paso (ver abajo).
 
 ## Componentes
 
@@ -153,4 +155,141 @@ cryptoville/
 - **Modo de la villa:** el interruptor «Quiero contratar» / «Quiero trabajar» (`modo` en `ui/estado.tsx`, evento `modo` del EventBus) rearma la escena de la villa con otras casas. En modo trabajar, cada «Se busca» abierto es una casa (evento `se-busca`), con la casa base de su villa, el cartel SE BUSCA y su autor en la puerta.
 - **Lote de cada «Se busca»:** columna `busquedas.lote`. La API asigna el primer número libre entre los visibles de la villa (abiertos y sin vencer), con un candado por villa (`pg_advisory_xact_lock`).
 - **Web:** la lupa de la barra abre la lista del modo actual (`ui/panels/PanelBuscar.tsx`, pestañas "Servicios" y "Se busca"; cambiar de pestaña cambia el modo). Los carteles están en `ui/components/Cartel.tsx`, y el detalle con las propuestas en `ui/panels/PanelBusqueda.tsx`.
+
+## v2: qué cambió
+
+### Resumen
+
+```
+ Navegador
+ ┌────────────────────────────────────────────────┐
+ │ React + Phaser                                 │
+ │ Wallets Kit · WalletConnect (QR) · Pollar       │──firma en el dispositivo
+ │ Presence/Broadcast (personas en línea)          │
+ └──┬──────────────┬───────────────────────┬──────┘
+    │ escribe      │ lee + tiempo real     │ subidas directas
+    ▼              ▼                       ▼
+ ┌─ API NestJS ────────────────┐  ┌─ Supabase ───────────────┐  ┌─ Mux ──────────┐
+ │ arma la tx sin firmar       │─►│ Postgres + RLS           │  │ videos         │
+ │ la envía y la verifica      │  │ Realtime (canales        │  │ (Supabase solo │
+ │ sincroniza eventos          │  │ privados por villa)      │  │ guarda el id)  │
+ │ llave de mantenimiento      │  │ Storage: fotos, pruebas, │  └────────────────┘
+ │ Didit (KYC) · Resend · Push │  │ capturas                 │
+ └──────────────┬──────────────┘  └──────────────────────────┘
+                │ RPC
+                ▼
+       Stellar: escrow v1, escrow v2, token
+```
+
+### Principios
+
+| Principio | Cómo se cumple |
+|---|---|
+| **Listo pero apagado** | Cada servicio externo se enciende solo si están todas sus variables (`servicio()` en `apps/api/src/config/configuracion.ts`). Si falta alguna, la función se oculta y la app sigue como antes |
+| **Una sola red** | `STELLAR_NETWORK` (`testnet` o `mainnet`) decide el passphrase, el RPC por defecto, las reglas (`reglasDe(red)`) y el mensaje de inicio de sesión (incluye la red: una firma de testnet no sirve en mainnet) |
+| **El servidor no firma por nadie** | La API arma la transacción **sin firmar**, la wallet de la persona la firma y la API comprueba que el hash firmado sea el mismo que armó. La única llave del servidor es la de mantenimiento (abajo) |
+| **El contrato manda** | Después de cada paso del v2 la API lee el pedido en el contrato (`pedido(id)`) y deja las fases de la base igual que en la red. Los plazos del v2 (revisión y disputa) también se leen del contrato (`ContratoV2Service`, cada hora) y van a la web en `/api/config` (`plazos_v2`); si no se pueden leer, se usan los del archivo de reglas |
+| **Lo simulado se dice** | Lo que en testnet funciona de mentira (la rampa del QR del banco) o que falta probar con el servicio real está en [simulaciones.md](simulaciones.md). En mainnet la API no arranca con la rampa simulada |
+| **Un archivo de reglas** | `packages/shared/src/reglas.ts`: comisiones, fases, plazos, tope por pedido, locales, sectores, chat, archivos, videos, portafolio y KYC. Lo que también vive en el contrato dice `// Debe coincidir con el contrato` |
+| **Mainnet se revisa al arrancar** | `apps/api/src/config/revision-mainnet.ts`: en mainnet la API no arranca si queda algo de prueba (llaves de ejemplo, RPC de testnet, KYC apagado, HTTP…). También: `npm run mainnet:revisar` |
+
+### Firmar dentro de la app y verificar
+
+1. `POST /api/transacciones/preparar` arma y simula la transacción (`paso_pedido` del v1, `paso_v2`, `pago_directo`, `pago_local` o `retiro_rampa`) y la guarda en `transacciones_preparadas` (10 minutos).
+2. La wallet la firma: Freighter y las de Stellar Wallets Kit, LOBSTR y otras por **WalletConnect (QR)**, o **Pollar** (entrar con correo).
+3. `POST /api/transacciones/enviar` comprueba el hash, la envía, espera la confirmación y registra el paso **ya verificado**.
+4. Respaldo: el Lab. Se pega el hash y la API lee esa transacción (`VerificadorService` en el v1, `verificarInvocacionV2` en el v2): contrato, función, partes, monto, fecha y número de pedido. Un hash falso o de otra transacción se rechaza. En los pedidos del v2, «¿Tu wallet no firma aquí? Hazlo en Stellar Lab» arma la transacción sin firmar para firmarla en el Lab (o en otra wallet); después se pega el hash (`POST /api/pedidos/:id/fases/pasos`) o la transacción firmada (`/transacciones/enviar`).
+5. **Sincronización:** `apps/api/src/sincronizacion/` lee los eventos de los dos contratos cada 30 segundos (`sincronizacion_cadena` guarda el cursor), así un paso hecho fuera de la app también aparece.
+
+**Llave de mantenimiento (`LLAVE_MANTENIMIENTO`):** una cuenta con poco XLM que solo puede llamar a funciones del v2 que cualquiera puede llamar y que siempre mandan el dinero a quien corresponde: `cobrar_por_vencimiento`, `reembolsar_por_vencimiento`, `resolver_por_vencimiento` y `extender` (cada 20 días). Lo limita `StellarService.firmarMantenimiento`.
+
+### Cuentas y confianza
+
+| Tema | Cómo funciona |
+|---|---|
+| **Varias wallets** | Una persona es una cuenta (`usuarios`) con varias wallets (`wallets`): una de la cuenta y una para cobrar. Para sumar una, la wallet nueva firma un mensaje que nombra la cuenta (`mensajeVincularWallet`) |
+| **Entrar** | Con Pollar configurado: botón grande «Entrar con Google», debajo «Entrar con tu correo» y, más chico, «¿Ya usas Web3? Conecta tu wallet». Pollar crea la wallet por detrás y firma el mensaje de inicio de sesión; la cuenta nueva toma el nombre de Google. En testnet se conserva la entrada con una llave de prueba |
+| **KYC (Didit)** | Una persona, una cuenta. Se guarda solo una **huella HMAC** de país, tipo y número de documento (`KYC_HMAC_SECRET`): nunca fotos ni el número. Una huella repetida no verifica otra cuenta. Se exige para abrir un local, cobrar y reseñar (`kyc.exigidoPara`). La insignia ✔ va junto al nombre: sobre la cabeza, en el perfil, en las propuestas y en los locales |
+| **Reportar y bloquear** | `reportes` y `bloqueos`. El equipo revisa la cola en el panel del árbitro y puede descartar, ocultar el contenido o suspender la cuenta. Un bloqueo impide pedidos, propuestas y chat en los dos sentidos |
+| **Avisos fuera de la app** | Web Push (VAPID, `public/sw.js`) y correo (Resend), con preferencias por persona. Recordatorios de plazos (`recordatorios`) |
+| **Legales** | Seis documentos Markdown en `apps/web/src/legal/` con su versión; se aceptan la primera vez y cuando cambian (`aceptaciones_legales`). Todo lo que necesita un abogado va en rojo con el aviso de `AVISO_ABOGADO` |
+| **Comentarios** | «Enviar comentarios» con captura opcional (bucket privado `capturas`); el equipo los ve en su panel |
+
+### Pagos por fases (contrato v2)
+
+| Método | Contrato | Comisión |
+|---|---|---|
+| Pagar directo | v2 `pagar_directo`: reparte en el momento, sin garantía ni disputa (solo reporte) | 1% |
+| Pagar con garantía | v2 con 1 fase (o v1, si no hay contrato v2) | 3% |
+| Por etapas | v2 con 2 a 5 fases | 3% de cada fase |
+
+- **Plan de fases** (`fases`): qué incluye, % del proyecto, % del pago, fecha y pruebas pactadas. Lo arma el proveedor al aceptar (o en su propuesta a un «Se busca») y el cliente lo acepta o pide cambios **antes de pagar**. La lógica compartida está en `packages/shared/src/pagos.ts`.
+- **Pruebas** (`pruebas`): archivos (bucket privado `pruebas`, con URL firmada), enlaces o videos de **Mux** con reproducción firmada. Al entregar, la huella del paquete (`textoHuellaEntrega`) va al contrato y las pruebas quedan selladas.
+- **Expediente:** plan, pruebas, chat e historial de cada pedido, para las partes y el árbitro.
+- **Disputas:** el panel del árbitro lista las del v1 (`disputas`) y las de las fases del v2 (en `fases`), con la fecha desde la que cualquiera puede repartir 50/50.
+- **Pagar con el QR del banco y pasar a mi banco (rampas):** para quien no tiene USDC. Una rampa cambia bolivianos por USDC (y al revés). Cada operación queda en `rampas` (RLS: la persona y el árbitro). En testnet la rampa es **simulada** (`RAMPA_SIMULADA=si`): el QR es de mentira y la API emite USDC de prueba; en mainnet es la de Pollar. Detalle en [simulaciones.md](simulaciones.md).
+- Detalle del contrato para el auditor: [contrato-v2.md](contrato-v2.md).
+
+### Villa y comunidad
+
+| Tema | Cómo funciona |
+|---|---|
+| **Varios locales** | Sin unicidad en `locales.usuario_id`. Hasta 3 gratis; del cuarto en adelante, un pago único en USDC a la tesorería (`pagos_plataforma`, una transacción por pago, verificada con el RPC); tope de 10. `PUT /api/mi-local` sigue con el local principal (el más antiguo). Nuevos: `GET /api/mis-locales`, `POST /api/locales`, `PUT /api/locales/:id` y `POST /api/locales/pago` |
+| **Personalizar** | Perfil → Personalizar → «Mi personaje» o «Un local» (y cuál). Dentro de tu propia casa, «Editar» edita esa casa |
+| **Sectores** | 60 casas por villa (la entrada más 8 calles). Después vienen «Creativo B», «Creativo C»… El sector sale del lote (`sectorDeLote`, `loteEnSector`), así las casas nunca se mueven. Solo se dibuja el sector donde estás; se pasa con el letrero del final de la última calle o con los botones A, B, C… junto al selector de villas. Cada modo cuenta aparte |
+| **Propuestas** | Llevan el local desde el que se propone (`propuestas.local_id`), un plan de fases opcional (`plan`) y hasta 5 proyectos del portafolio (`proyectos`). Quien publicó elige la propuesta **y cómo paga**; por etapas, se usa el plan de la propuesta tal cual |
+| **Portafolio** | `experiencias` y `proyectos` (fotos del bucket `fotos`, enlaces https con `rel="nofollow ugc noopener"`, videos de Mux o de YouTube y Vimeo según `portafolio.dominiosVideo`). Es público por RLS, salvo lo oculto y las cuentas suspendidas. Los proyectos **destacados** (hasta 4) cuelgan como cuadros en la pared del interior y se abren al tocarlos |
+| **Personas en línea** | Canal privado de Supabase Realtime por villa y sector (`villa:tech:1`): Presence para saber quién está y Broadcast para las posiciones (hasta 8 por segundo, interpoladas). El nombre y la insignia se leen de `usuarios`, no del mensaje. Se dibujan las 50 más cercanas, con el nombre siempre visible. React maneja el canal (`features/cercania/PersonasEnLinea.tsx`) y Phaser solo recibe eventos (`game/objects/Personas.ts`) |
+| **Chat por cercanía** | Cerca de alguien aparece «Hablar con… [H]» (en el celular, el mismo botón sin la tecla). Globo sobre la cabeza y una ventanita con «Visitar local», «Ver publicaciones», «Reportar» y «Bloquear». Los mensajes van por la API (`POST /api/cercania/mensajes`: 20 por minuto, respetando los bloqueos) y se guardan 7 días en `mensajes_cercania`, solo para revisar reportes. Después se borran solos, salvo que haya un reporte abierto |
+
+### Módulos nuevos de la API
+
+| Carpeta | Qué hace |
+|---|---|
+| `stellar/` | RPC: armar, simular, enviar y leer transacciones y eventos; llave de mantenimiento; verificador del v1 |
+| `transacciones/` | Preparar y enviar las transacciones que se firman en la app |
+| `sincronizacion/` | Eventos de los contratos, vencimientos, renovación (`extender`), cierre de pagos directos |
+| `pagos/` | Métodos de pago, plan de fases, pruebas, contrato v2, expediente |
+| `wallets/` | Varias wallets por cuenta |
+| `kyc/` | Didit: sesión, webhook firmado, huella del documento |
+| `moderacion/` | Reportes, bloqueos, suspensión |
+| `notificaciones/` | Push, correo y recordatorios |
+| `videos/` | Mux: subida directa, webhook y tokens de reproducción |
+| `legal/` | Documentos, aceptaciones y comentarios |
+| `locales/` | Varios locales y el pago del local extra |
+| `portafolio/` | Experiencia y proyectos |
+| `cercania/` | Chat por cercanía y su limpieza a los 7 días |
+| `rampas/` | Pagar con el QR del banco y pasar a mi banco (rampa simulada en testnet) |
+| `config/` | Configuración por red, servicios encendidos y revisión de mainnet |
+
+### Variables nuevas
+
+| Variable | Para qué |
+|---|---|
+| `STELLAR_RPC_URL`, `STELLAR_VERIFICAR` | RPC de la red y si se verifican los pasos (siempre `si` en mainnet) |
+| `ESCROW_V2_CONTRACT_ID`, `TESORERIA_DIRECCION` | Contrato v2 y la cuenta que cobra comisiones y locales extra |
+| `LLAVE_MANTENIMIENTO` | Vencimientos y `extender` (poco XLM) |
+| `PUBLIC_URL`, `ENTORNO_SERVICIOS` | Dirección pública y si los servicios externos están en `pruebas` o en `produccion` |
+| `POLLAR_API_KEY`, `WALLETCONNECT_PROJECT_ID` | Entrar con correo y wallets por QR |
+| `DIDIT_API_KEY`, `DIDIT_WORKFLOW_ID`, `DIDIT_WEBHOOK_SECRET`, `KYC_HMAC_SECRET` | KYC |
+| `MUX_TOKEN_ID`, `MUX_TOKEN_SECRET`, `MUX_WEBHOOK_SECRET`, `MUX_SIGNING_KEY_ID`, `MUX_SIGNING_KEY_PRIVATE` | Videos |
+| `RESEND_API_KEY`, `CORREO_REMITENTE` | Correos de aviso |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_CONTACTO` | Notificaciones del navegador |
+| `RAMPA_SIMULADA`, `RAMPA_SIMULADA_LLAVE` | Solo testnet: la rampa simulada del QR del banco y la llave del emisor del USDC de prueba (si falta, la de `.seed-keys.json`) |
+
+Plantillas: `.env.example`, `.env.local.example` y `.env.mainnet.example`. Qué falta para mainnet: [mainnet.md](mainnet.md).
+
+### Pruebas (v2)
+
+| Parte | Cantidad | Qué cubren |
+|---|---|---|
+| Contratos (Rust) | v1: 27 + 1 manual · v2: 27 + 1 manual · USDC de prueba: 5 | En el v2: garantía y etapas, cambios, vencimientos, disputas con sus tres resultados, pago directo, pausa, roles, actualización con 7 días de aviso (también con el `.wasm` real) y la propiedad «todo lo que entra sale a alguien» |
+| Shared (Vitest) | 46 | Además de lo de v1: reglas por red, plan de fases y montos, estados derivados de las fases, huella de la entrega, legales, sectores, videos del portafolio y la cotización de la rampa simulada |
+| API (Jest + Supabase local) | 86 en 10 suites | Además de lo de v1: lectura de transacciones sin red, wallets, legales, KYC y moderación, métodos de pago y plan por etapas, varios locales y el pago del local extra, propuestas con local, plan y proyectos, portafolio, chat por cercanía (RLS, límite, bloqueos, borrado a los 7 días), el canal privado de Realtime, la rampa simulada (recarga, pago simulado una sola vez, QR vencido, retiro, RLS), los errores de la base como 400 y la configuración (mismo contrato en v1 y v2, rampa solo en testnet). Las pruebas apagan los servicios externos del `.env` de quien las corre (`test/sin-servicios.ts`) |
+| Web (Vitest) | 31 | Además de lo de v1: lógica de pagos y fases en la interfaz |
+
+### Pendiente a propósito
+
+- **Tribunal de la villa** (jurados de la comunidad para las disputas): la idea está guardada y **no se implementa por ahora**. Las disputas las resuelve el árbitro del equipo.
+- **Monedas del juego:** no hay, para no confundir.
 
