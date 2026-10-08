@@ -120,6 +120,42 @@ Si el servidor es de otra persona y ya tiene servicios en los puertos 80 y 443:
 - La app queda en `http://IP:PUERTO`, **sin HTTPS**: Let's Encrypt necesita los puertos 80 o 443 para dar el certificado.
 - Para tener HTTPS en un servidor compartido, el dueño puede agregar en su proxy (nginx, Caddy, Traefik) una ruta de `IP-con-guiones.sslip.io` hacia `localhost:PUERTO`.
 
+### HTTPS con el proxy del dueño del VPS
+
+El dueño agrega **una** ruta en su proxy, que ya tiene los puertos 80 y 443 y saca el certificado solo. Con la IP `144.22.43.169` y el puerto `6702`:
+
+- **Caddy** (en su Caddyfile; después, `caddy reload`):
+  ```
+  144-22-43-169.sslip.io {
+  	reverse_proxy 127.0.0.1:6702
+  }
+  ```
+  Si su Caddy corre en Docker, en lugar de `127.0.0.1` va la IP del host vista desde el contenedor (por ejemplo `172.17.0.1:6702`, o `host.docker.internal:6702` con `extra_hosts: ["host.docker.internal:host-gateway"]`).
+- **nginx** (un archivo en `/etc/nginx/sites-available/` y su enlace en `sites-enabled/`; después, `sudo nginx -t && sudo systemctl reload nginx` y el certificado con `sudo certbot --nginx -d 144-22-43-169.sslip.io`):
+  ```
+  server {
+      listen 80;
+      server_name 144-22-43-169.sslip.io;
+      client_max_body_size 10m;
+      location / {
+          proxy_pass http://127.0.0.1:6702;
+          proxy_set_header Host $host;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+      }
+  }
+  ```
+
+Cryptoville confía en la IP que manda ese proxy solo si viene de una red privada (Caddy: `trusted_proxies`; API: `trust proxy`), así cada persona conserva su IP y los límites por minuto no se comparten.
+
+Después, en el `.env` de Cryptoville (y `bash deploy/deploy.sh`):
+```dotenv
+PUBLIC_HOST=144-22-43-169.sslip.io
+PUBLIC_URL=https://144-22-43-169.sslip.io
+PUERTO_PUBLICO=6702
+```
+Y cambia a `https://144-22-43-169.sslip.io` el dominio en Pollar (**Build → Domains**) y en WalletConnect, y los webhooks de Didit (`/api/kyc/webhook`) y Mux (`/api/videos/webhook`).
+
 ## Despliegue automático con GitHub Actions
 
 | Evento | CI (`ci.yml`) | Deploy (`deploy.yml`) |
