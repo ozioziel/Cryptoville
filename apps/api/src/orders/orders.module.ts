@@ -31,7 +31,17 @@ import { EscrowService } from '../escrow/escrow.service';
 import type { Parte, Usuario } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AvisosService } from '../avisos/avisos.service';
+import { KycService } from '../kyc/kyc.module';
 import { OrdersService } from './orders.service';
+import { LocalesModule } from '../locales/locales.module';
+import { RampasModule } from '../rampas/rampas.module';
+import { TransaccionesController, TransaccionesService } from '../transacciones/transacciones.module';
+import { PagosController } from '../pagos/pagos.controller';
+import { PlanFaseDto } from '../pagos/pagos.controller';
+import { PagosService } from '../pagos/pagos.service';
+import { METODOS_PAGO, type MetodoPago } from '@cryptoville/shared';
+import { ValidateNested, ArrayMaxSize, IsArray } from 'class-validator';
+import { MONTO_USDC } from '../common/montos';
 
 class CrearPedidoDto {
   @IsUUID('4')
@@ -40,6 +50,11 @@ class CrearPedidoDto {
   @IsString()
   @Length(10, 1000, { message: 'Cuenta qué necesitas (entre 10 y 1000 caracteres)' })
   detalle: string;
+
+  /** Cómo quiere pagar el cliente (se elige antes de comprar). Por defecto, con garantía. */
+  @IsOptional()
+  @IsIn(METODOS_PAGO, { message: 'Elige pagar directo, con garantía o por etapas' })
+  metodo_pago?: MetodoPago;
 }
 
 class AceptarDto {
@@ -48,8 +63,16 @@ class AceptarDto {
   fecha_limite: Date;
 
   @IsOptional()
-  @Matches(/^\d{1,9}(\.\d{1,7})?$/, { message: 'Monto inválido (USDC, hasta 7 decimales)' })
+  @Matches(MONTO_USDC, { message: 'Monto inválido (USDC mayor que 0, hasta 7 decimales)' })
   monto_usdc?: string;
+
+  /** Por etapas: el plan de fases (lo mismo que POST /pedidos/:id/plan). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(10)
+  @ValidateNested({ each: true })
+  @Type(() => PlanFaseDto)
+  fases?: PlanFaseDto[];
 }
 
 class PasoDto {
@@ -100,17 +123,32 @@ export class OrdersController {
     private readonly escrow: EscrowService,
     private readonly prisma: PrismaService,
     private readonly avisos: AvisosService,
+    private readonly kyc: KycService,
+    private readonly pagos: PagosService,
   ) {}
 
   @Post()
   async crear(@UsuarioActual() yo: Usuario, @Body() dto: CrearPedidoDto) {
-    return serializar(await this.orders.crear(yo, dto.servicio_id, dto.detalle));
+    const metodo = dto.metodo_pago ?? 'garantia';
+    return serializar(await this.orders.crear(yo, dto.servicio_id, dto.detalle, { metodo, contrato: this.pagos.contratoPara(metodo) }));
   }
 
+  /**
+   * El proveedor acepta: fija el precio y la fecha límite.
+   * - Por etapas: además manda el plan de fases (el cliente lo acepta antes de pagar).
+   * - Con garantía en el contrato v2: el plan es una sola fase.
+   */
   @Post(':id/aceptar')
   @HttpCode(200)
   async aceptar(@UsuarioActual() yo: Usuario, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AceptarDto) {
-    return serializar(await this.orders.aceptar(yo, id, dto.fecha_limite, dto.monto_usdc));
+    const actual = await this.prisma.pedido.findUnique({ where: { id }, select: { metodo_pago: true } });
+    if (actual?.metodo_pago === 'etapas') {
+      if (!dto.fases?.length) throw new BadRequestException('Por etapas: manda el plan de fases');
+      return serializar(await this.pagos.proponerPlan(yo, id, dto.fases, dto.monto_usdc));
+    }
+    const pedido = await this.orders.aceptar(yo, id, dto.fecha_limite, dto.monto_usdc);
+    if (pedido.contrato === 'v2' && pedido.metodo_pago === 'garantia') await this.pagos.crearFaseUnica(pedido.id);
+    return serializar(await this.prisma.pedido.findUniqueOrThrow({ where: { id } }));
   }
 
   @Post(':id/cancelar')
@@ -162,6 +200,8 @@ export class OrdersController {
   async resena(@UsuarioActual() yo: Usuario, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ResenaDto) {
     const { pedido, rol } = await this.orders.cargarVisible(id, yo);
     if (rol !== 'cliente' && rol !== 'proveedor') throw new ForbiddenException('Solo el cliente y el proveedor reseñan');
+    // Reseñar exige el KYC (si está encendido): así nadie infla su reputación con cuentas falsas.
+    this.kyc.exigir(yo, 'resenar');
     if (!permiteResena(pedido.estado)) {
       throw new ForbiddenException(
         esFinal(pedido.estado)
@@ -182,5 +222,10 @@ export class OrdersController {
   }
 }
 
-@Module({ controllers: [OrdersController], providers: [OrdersService, EscrowService] })
+@Module({
+  imports: [LocalesModule, RampasModule],
+  controllers: [OrdersController, TransaccionesController, PagosController],
+  providers: [OrdersService, EscrowService, TransaccionesService, PagosService],
+  exports: [OrdersService, EscrowService, PagosService],
+})
 export class OrdersModule {}

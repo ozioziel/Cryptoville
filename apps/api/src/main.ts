@@ -11,7 +11,8 @@ import { leerConfiguracion } from './config/configuracion';
 
 export async function crearApp() {
   const config = leerConfiguracion();
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
+  // rawBody: los webhooks (Didit, Mux) se verifican con la firma del cuerpo tal como llegó.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, rawBody: true });
   app.useLogger(app.get(Logger));
   app.set('trust proxy', 1); // detrás de Caddy: la IP real llega en X-Forwarded-For
   app.setGlobalPrefix('api');

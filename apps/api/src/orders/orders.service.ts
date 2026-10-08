@@ -9,7 +9,10 @@ import { formatoUsdc, puedeHacer, siguienteEstado, type RolEnPedido } from '@cry
 import { randomInt } from 'node:crypto';
 import { AvisosService } from '../avisos/avisos.service';
 import { Prisma, type Pedido, type Usuario } from '../generated/prisma/client';
+import { KycService } from '../kyc/kyc.module';
+import { ModeracionService } from '../moderacion/moderacion.module';
 import { PrismaService } from '../prisma/prisma.service';
+import { walletParaCobrar } from '../wallets/wallets.module';
 
 const HORA = 3_600_000;
 const DIA = 24 * HORA;
@@ -23,6 +26,8 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly avisos: AvisosService,
+    private readonly kyc: KycService,
+    private readonly moderacion: ModeracionService,
   ) {}
 
   /** Rol del usuario en el pedido: cliente, proveedor, árbitro (si no participa) o null. */
@@ -50,12 +55,14 @@ export class OrdersService {
     return { pedido, rol };
   }
 
-  async crear(cliente: Usuario, servicioId: string, detalle: string) {
+  /** `metodo` y `contrato`: cómo se paga y en qué contrato (los decide PagosService). */
+  async crear(cliente: Usuario, servicioId: string, detalle: string, pago: { metodo: string; contrato: string } = { metodo: 'garantia', contrato: 'v1' }) {
     const servicio = await this.prisma.servicio.findUnique({ where: { id: servicioId }, include: { local: true } });
     if (!servicio || !servicio.activo || !servicio.local.activo) {
       throw new NotFoundException('Ese servicio no está disponible');
     }
     if (servicio.local.usuario_id === cliente.id) throw new BadRequestException('No puedes contratar tu propio servicio');
+    await this.moderacion.exigirSinBloqueo(cliente.id, servicio.local.usuario_id);
 
     for (let intento = 0; intento < 5; intento++) {
       try {
@@ -67,6 +74,8 @@ export class OrdersService {
             proveedor_id: servicio.local.usuario_id,
             monto_usdc: servicio.precio_usdc,
             detalle: detalle.trim(),
+            metodo_pago: pago.metodo,
+            contrato: pago.contrato,
           },
         });
         await this.avisos.crear(
@@ -87,6 +96,8 @@ export class OrdersService {
   async aceptar(usuario: Usuario, id: string, fechaLimite: Date, montoUsdc?: string) {
     const { pedido, rol } = await this.cargarVisible(id, usuario);
     this.exigirPermiso('aceptar', pedido, rol);
+    // Aceptar un pedido es para cobrarlo: exige el KYC (si está encendido).
+    this.kyc.exigir(usuario, 'cobrar');
     const ahora = Date.now();
     if (fechaLimite.getTime() < ahora + HORA || fechaLimite.getTime() > ahora + 90 * DIA) {
       throw new BadRequestException('La fecha límite debe ser entre 1 hora y 90 días desde ahora');
@@ -94,13 +105,15 @@ export class OrdersService {
     const actualizado = await this.moverEstado(pedido, 'aceptar', {
       fecha_limite: fechaLimite,
       ...(montoUsdc ? { monto_usdc: montoUsdc } : {}),
+      // El proveedor cobra en su wallet "para cobrar" (queda fija en el pedido).
+      direccion_proveedor: await walletParaCobrar(this.prisma, pedido.proveedor),
     });
     await this.prisma.pasoPedido.create({ data: { pedido_id: id, accion: 'aceptar', declarado_por: usuario.id } });
     await this.avisos.crear(
       pedido.cliente_id,
       'te_toca_pagar',
       `${pedido.proveedor.nombre} aceptó tu pedido por ${formatoUsdc(String(actualizado.monto_usdc))} USDC. ` +
-        'Paga en garantía desde Stellar Lab para que empiece.',
+        (pedido.metodo_pago === 'directo' ? 'Págale directo para que empiece.' : 'Paga en garantía para que empiece.'),
       id,
     );
     return actualizado;
