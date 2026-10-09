@@ -6,7 +6,7 @@ describe('perfiles de todas las apariencias', () => {
   it('conserva los retratos frontales y genera ocho cuadros distintos por lado', () => {
     for (const a of Object.values(APARIENCIA_POR_AVATAR)) {
       expect(crearPersona(a)).toBe(crearPersona(a, { direccion: 'frente' }));
-      for (const direccion of ['derecha', 'izquierda'] as const) {
+      for (const direccion of ['derecha', 'izquierda', 'espalda'] as const) {
         const cuadros = Array.from({ length: 8 }, (_, paso) => crearPersona(a, { direccion, paso }));
         expect(new Set(cuadros).size).toBe(8);
         for (const svg of cuadros) {

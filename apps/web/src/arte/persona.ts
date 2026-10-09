@@ -23,7 +23,7 @@ export interface OpcionesPersona {
   /** Tamaño en píxeles (para rasterizar en Phaser). */
   tamano?: { ancho: number; alto: number };
   titulo?: string;
-  direccion?: 'frente' | 'derecha' | 'izquierda';
+  direccion?: 'frente' | 'derecha' | 'izquierda' | 'espalda';
   /** 0..7 para caminar; undefined para reposo. */
   paso?: number;
 }
@@ -42,6 +42,7 @@ export function crearPersona(apariencia: AparienciaPersona | null | undefined, o
   const zapato = colorDe(CATALOGO_PERSONA.zapatos, a.zapatos);
   const gorro = colorDe(CATALOGO_PERSONA.colorGorro, a.colorGorro);
   const vestido = a.arriba === 'vestido';
+  if (opciones.direccion === 'espalda') return espaldaPersona(a, opciones, { piel, pelo, ropa, abajo, zapato, gorro });
   if (opciones.direccion && opciones.direccion !== 'frente') {
     return perfilPersona(a, opciones, { piel, pelo, ropa, abajo, zapato, gorro });
   }
@@ -324,7 +325,7 @@ function perfilPersona(a: AparienciaPersona, o: OpcionesPersona, c: Record<'piel
     `rotate(${sostiene ? fase * 3 : fase * (lejano ? 22 : -22)} 29 48)`);
   const largo = ['largo', 'melena', 'rizado'].includes(a.peinado);
   const pelo = peloPerfil(a.peinado, c.pelo);
-  const cabeza = `${largo ? `<path d="M16 24Q11 12 29 7Q42 8 42 24L28 32L25 ${a.peinado === 'largo' ? 55 : 44}H14Z" fill="${c.pelo}"/>` : ''}${a.peinado === 'recogido' ? `<circle cx="15" cy="14" r="6" fill="${c.pelo}"/>` : ''}<path d="M17 26C16 14 25 9 33 11Q44 13 43 27L48 32Q49 34 43 35Q43 43 32 43L24 39Z" fill="${c.piel}"/>${barbaPerfil(a.barba, c.pelo)}${pelo}${a.peinado === 'rizado' ? `<path d="M16 23Q9 17 17 13Q15 5 24 8Q30 2 35 9Q45 7 44 19" fill="${c.pelo}"/>` : ''}<ellipse cx="27" cy="30" rx="3" ry="4" fill="${c.piel}" stroke-width="1.4"/>${a.lentes === 'sol' ? '' : `<ellipse cx="40" cy="29" rx="1.5" ry="2.4" fill="${TINTA}" stroke="none"/>`}${a.lentes !== 'ninguno' ? `<path d="M27 28L37 29" fill="none" stroke-width="1.5"/><rect x="36" y="${a.lentes === 'lectura' ? 30 : 26}" width="8" height="${a.lentes === 'lectura' ? 4 : 8}" rx="${a.lentes === 'redondos' ? 4 : 1.5}" fill="${a.lentes === 'sol' ? TINTA : '#ffffff44'}" stroke-width="1.5"/>` : ''}${grupo(gorroDe(a.gorro, c.gorro), 'translate(7 0) scale(.8 1)')}${a.gorro === 'gorra' ? `<path d="M36 23H50Q53 25 48 26H37Z" fill="${c.gorro}"/>` : ''}`;
+  const cabeza = `${largo ? `<path d="M16 24Q11 12 29 7Q42 8 42 24L28 32L25 ${a.peinado === 'largo' ? 55 : 44}H14Z" fill="${c.pelo}"/>` : ''}${a.peinado === 'recogido' ? `<circle cx="15" cy="14" r="6" fill="${c.pelo}"/>` : ''}<path d="M15 27C15 16 22 10 31 10C40 10 46 17 46 27C46 37 40 44 31 44C22 44 15 37 15 27Z" fill="${c.piel}"/>${barbaPerfil(a.barba, c.pelo)}${pelo}${a.peinado === 'rizado' ? `<path d="M16 23Q9 17 17 13Q15 5 24 8Q30 2 35 9Q45 7 44 19" fill="${c.pelo}"/>` : ''}<ellipse cx="27" cy="30" rx="3" ry="4" fill="${c.piel}" stroke-width="1.4"/>${a.lentes === 'sol' ? '' : `<ellipse cx="40" cy="29" rx="1.5" ry="2.4" fill="${TINTA}" stroke="none"/>`}${a.lentes !== 'ninguno' ? `<path d="M27 28L37 29" fill="none" stroke-width="1.5"/><rect x="36" y="${a.lentes === 'lectura' ? 30 : 26}" width="8" height="${a.lentes === 'lectura' ? 4 : 8}" rx="${a.lentes === 'redondos' ? 4 : 1.5}" fill="${a.lentes === 'sol' ? TINTA : '#ffffff44'}" stroke-width="1.5"/>` : ''}${grupo(gorroDe(a.gorro, c.gorro), 'translate(7 0) scale(.8 1)')}${a.gorro === 'gorra' ? `<path d="M36 23H50Q53 25 48 26H37Z" fill="${c.gorro}"/>` : ''}`;
   const cuerpo = `${pierna(true)}${brazo(true)}${pierna(false)}${grupo((a.arriba === 'vestido' ? '' : ropaAbajo(a.abajo, c.abajo)) + torso(a.arriba, c.ropa), 'translate(12 0) scale(.6 1)')}${a.objeto === 'camara' ? grupo(objeto(a.objeto), 'translate(20 0) scale(.6 1)') : ''}${brazo(false)}${grupo(cabeza, `translate(0 ${rebote})`)}`;
   const dibujo = `<ellipse cx="30" cy="88" rx="14" ry="3" fill="${TINTA}" opacity=".18"/><g stroke="${TINTA}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">${grupo(cuerpo, o.direccion === 'izquierda' ? 'translate(60 0) scale(-1 1)' : 'translate(0 0)')}</g>`;
   return envolver(o.recorte === 'cabeza' ? '8 2 44 44' : '0 0 60 92', dibujo, o.tamano, o.titulo);
@@ -366,4 +367,45 @@ function peloPerfil(tipo: string, color: string): string {
     case 'rizado': return forma('M16 31Q10 28 14 23Q9 17 17 13Q15 5 24 8Q30 2 35 9Q45 7 44 19L36 20L29 24L26 35H20Z');
     default: return forma('M16 31C11 15 20 6 30 7Q42 7 44 22L35 19L28 24L26 35H20Z');
   }
+}
+
+/** Espalda: los objetos sostenidos delante quedan ocultos por el cuerpo. */
+function espaldaPersona(a: AparienciaPersona, o: OpcionesPersona, c: Record<'piel' | 'pelo' | 'ropa' | 'abajo' | 'zapato' | 'gorro', string>): string {
+  const fase = o.paso === undefined ? 0 : Math.sin(o.paso * Math.PI / 4);
+  const rebote = o.paso === undefined ? 0 : -Math.abs(Math.cos(o.paso * Math.PI / 4));
+  const vestido = a.arriba === 'vestido';
+  const pierna = (x: number, signo: number) => {
+    const levantar = Math.max(0, fase * signo) * 4;
+    const color = a.abajo === 'pantalon' && !vestido ? c.abajo : c.piel;
+    const bota = a.zapatos.startsWith('botas');
+    return `<g transform="translate(0 ${-levantar})"><path d="M${x} 65V81" stroke-width="9"/><path d="M${x} 65V81" stroke="${color}" stroke-width="5"/><rect x="${x - 4.5}" y="${bota ? 76 : 80}" width="9" height="${bota ? 10 : 6}" rx="3" fill="${c.zapato}"/>${a.zapatos.startsWith('zapatillas') ? `<path d="M${x - 3} 84H${x + 3}" stroke="#f4efe6" stroke-width="1.2"/>` : ''}</g>`;
+  };
+  const brazo = (x: number, signo: number) => {
+    const manoX = x + signo * 3;
+    const manoY = 62 + fase * signo * 2;
+    return `<path d="M${x} 48L${manoX} ${manoY}" stroke-width="8"/><path d="M${x} 48L${manoX} ${manoY}" stroke="${MANGA_CORTA.has(a.arriba) ? c.piel : c.ropa}" stroke-width="4.5"/>${MANGA_CORTA.has(a.arriba) ? `<path d="M${x} 48L${x + signo} 53" stroke="${c.ropa}" stroke-width="5"/>` : ''}<circle cx="${manoX}" cy="${manoY}" r="3.4" fill="${c.piel}" stroke-width="1.5"/>`;
+  };
+  let ropa = `<path d="${vestido ? 'M20 45Q30 41 40 45L44 76Q30 80 16 76Z' : TORSO}" fill="${c.ropa}"/>`;
+  if (a.arriba === 'sudadera') ropa += `<path d="M21 43Q30 39 39 43L37 53Q30 58 23 53Z" fill="${oscurecer(c.ropa)}"/>`;
+  if (a.arriba === 'delantal') ropa += '<path d="M23 43L37 62M37 43L23 62M19 62H41" stroke="#efe3cf" stroke-width="3"/><path d="M30 62Q22 58 24 64Q26 67 30 62Q38 58 36 64Q34 67 30 62L32 70" stroke="#efe3cf" fill="none"/>';
+  if (['camisa', 'chaqueta', 'sueter', 'vestido'].includes(a.arriba)) ropa += `<path d="M21 ${a.arriba === 'vestido' ? 64 : 59}Q30 63 39 ${a.arriba === 'vestido' ? 64 : 59}" stroke="${oscurecer(c.ropa)}" fill="none" stroke-width="1.4"/>`;
+  if (a.objeto === 'camara') ropa += '<path d="M25 42Q30 49 35 42" fill="none" stroke="#4b4048" stroke-width="2"/>';
+  // Solo sobresalen los objetos pequeños llevados junto a la mano derecha (a la izquierda al ver la espalda).
+  const objetoLateral = ['pincel', 'microfono', 'taza'].includes(a.objeto)
+    ? `<g transform="translate(55 ${fase * -2 + 3}) scale(-1 1)">${objetoPerfil(a.objeto)}</g>` : '';
+  let pelo = '';
+  if (a.peinado === 'calvo') pelo = `<path d="M14 27Q30 39 46 27L45 35Q30 46 15 35Z" fill="${c.pelo}"/>`;
+  else if (a.peinado === 'rizado') pelo = peloAtras('rizado', c.pelo);
+  else {
+    const largo = a.peinado === 'largo' ? 53 : a.peinado === 'melena' ? 44 : 37;
+    pelo = `<path d="M13 27C11 13 20 5 30 5C40 5 49 13 47 27L47 ${largo - 5}Q30 ${largo + 5} 13 ${largo - 5}Z" fill="${c.pelo}"/>`;
+    if (a.peinado === 'rapado') pelo = `<ellipse cx="30" cy="26" rx="16" ry="15" fill="${c.pelo}"/>`;
+    if (['largo', 'melena', 'lateral'].includes(a.peinado)) pelo += `<path d="M25 12Q21 25 23 ${largo - 2}M35 12Q39 25 37 ${largo - 2}" stroke="${oscurecer(c.pelo)}" stroke-width="1" fill="none"/>`;
+  }
+  const gorro = a.gorro === 'gorra'
+    ? `<path d="M13 24C12 12 20 6 30 6C40 6 48 12 47 24Z" fill="${c.gorro}"/><path d="M24 24Q30 15 36 24Z" fill="${c.pelo}"/><rect x="23" y="23" width="14" height="3" rx="1" fill="${oscurecer(c.gorro)}"/>`
+    : gorroDe(a.gorro, c.gorro);
+  const cabeza = `${orejas(c.piel)}<ellipse cx="30" cy="27" rx="17" ry="16" fill="${c.piel}"/>${pelo}${a.lentes !== 'ninguno' ? `<path d="M13 29L17 28M43 28L47 29" stroke="${TINTA}" stroke-width="1.5"/>` : ''}${gorro}${a.peinado === 'recogido' ? `<circle cx="30" cy="27" r="7" fill="${c.pelo}"/><path d="M26 24Q33 20 34 28" fill="none" stroke="${oscurecer(c.pelo)}" stroke-width="1"/>` : ''}`;
+  const dibujo = `<ellipse cx="30" cy="88" rx="16" ry="3.5" fill="${TINTA}" opacity=".18"/><g stroke="${TINTA}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">${pierna(25, 1)}${pierna(35, -1)}${objetoLateral}${brazo(20, -1)}${brazo(40, 1)}${vestido ? '' : ropaAbajo(a.abajo, c.abajo)}${ropa}<g transform="translate(0 ${rebote})">${cabeza}</g></g>`;
+  return envolver(o.recorte === 'cabeza' ? '8 2 44 44' : '0 0 60 92', dibujo, o.tamano, o.titulo);
 }
