@@ -78,7 +78,7 @@ const actual = existsSync(path.join(raiz, '.env')) ? readFileSync(path.join(raiz
 const valoresActuales = Object.fromEntries(
   actual
     .split(/\r?\n/)
-    .filter((l) => /^[A-Z_]+=/.test(l))
+    .filter((l) => /^[A-Z][A-Z0-9_]*=/.test(l))
     .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]),
 );
 const automaticos = {
@@ -91,7 +91,7 @@ const automaticos = {
 const salida = plantilla
   .split(/\r?\n/)
   .map((linea) => {
-    const m = /^([A-Z_]+)=(.*)$/.exec(linea);
+    const m = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(linea);
     if (!m) return linea;
     const [, nombre, defecto] = m;
     if (automaticos[nombre]) return `${nombre}=${automaticos[nombre]}`;
@@ -103,7 +103,13 @@ const salida = plantilla
     return `${nombre}=${defecto}`;
   })
   .join('\n');
-writeFileSync(path.join(raiz, '.env'), salida);
+// Las variables que agregaste a mano y no están en la plantilla también se conservan.
+const enPlantilla = new Set([...plantilla.matchAll(/^([A-Z][A-Z0-9_]*)=/gm)].map((m) => m[1]));
+const extras = Object.entries(valoresActuales).filter(([nombre]) => !enPlantilla.has(nombre));
+const extrasTexto = extras.length
+  ? `\n# Variables propias que no están en .env.local.example\n${extras.map(([n, v]) => `${n}=${v}`).join('\n')}\n`
+  : '';
+writeFileSync(path.join(raiz, '.env'), salida.replace(/\n*$/, '\n') + extrasTexto);
 console.log('.env listo (las variables de Stellar que ya tenías se conservaron).');
 
 paso('Paquete compartido');
