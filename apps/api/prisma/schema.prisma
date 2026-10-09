@@ -123,6 +123,8 @@ model Usuario {
   verificado Boolean  @default(false)
   /// Suspendida por el equipo después de un reporte: no puede entrar ni escribir.
   suspendido Boolean  @default(false)
+  /// Lote de su edificio en la Plaza principal (CVs): lo asigna la API al abrir el primer local y lo libera al archivar el último.
+  lote_plaza Int?
   creado_en  DateTime @default(now()) @db.Timestamptz(3)
 
   /// Varios locales por persona (hasta 3 gratis; el principal es el más antiguo).
@@ -131,6 +133,8 @@ model Usuario {
   rampas                    Rampa[]
   experiencias              Experiencia[]
   proyectos                 Proyecto[]
+  trabajosPublicos          TrabajoPublico[]
+  cv                        Cv?
   mensajesCercaniaEnviados  MensajeCercania[]      @relation("cercaniaDe")
   mensajesCercaniaRecibidos MensajeCercania[]      @relation("cercaniaPara")
   pedidosCliente            Pedido[]               @relation("cliente")
@@ -159,6 +163,8 @@ model Usuario {
   pruebas                   Prueba[]
   fasesDisputadas           Fase[]                 @relation("fasesDisputa")
 
+  /// Único entre los que tienen edificio (índice parcial, ver la migración plaza_y_cv).
+  @@index([lote_plaza], map: "usuarios_lote_plaza_key")
   @@map("usuarios")
 }
 
@@ -257,18 +263,19 @@ model Pedido {
   creado_en           DateTime     @default(now()) @db.Timestamptz(3)
   actualizado_en      DateTime     @default(now()) @updatedAt @db.Timestamptz(3)
 
-  servicio  Servicio     @relation(fields: [servicio_id], references: [id])
-  cliente   Usuario      @relation("cliente", fields: [cliente_id], references: [id])
-  proveedor Usuario      @relation("proveedor", fields: [proveedor_id], references: [id])
-  pasos     PasoPedido[]
-  mensajes  Mensaje[]
-  disputa   Disputa?
-  resenas   Resena[]
-  avisos    Aviso[]
-  busqueda  Busqueda?
-  fases     Fase[]
-  pruebas   Prueba[]
-  rampas    Rampa[]
+  servicio         Servicio         @relation(fields: [servicio_id], references: [id])
+  cliente          Usuario          @relation("cliente", fields: [cliente_id], references: [id])
+  proveedor        Usuario          @relation("proveedor", fields: [proveedor_id], references: [id])
+  pasos            PasoPedido[]
+  mensajes         Mensaje[]
+  disputa          Disputa?
+  resenas          Resena[]
+  avisos           Aviso[]
+  busqueda         Busqueda?
+  fases            Fase[]
+  pruebas          Prueba[]
+  rampas           Rampa[]
+  trabajosPublicos TrabajoPublico[]
 
   @@index([cliente_id])
   @@index([proveedor_id])
@@ -731,17 +738,24 @@ model PagoPlataforma {
 model Experiencia {
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   usuario_id  String    @db.Uuid
+  /// Sección del CV: trabajo | educacion | certificacion | premio | voluntariado (packages/shared/src/cv.ts).
+  tipo        String    @default("trabajo")
   puesto      String
   lugar       String
   desde       DateTime  @db.Date
   hasta       DateTime? @db.Date
   descripcion String?
+  /// Enlace https (la credencial de una certificación).
+  enlace      String?
+  /// Se ve en el CV público.
+  publico     Boolean   @default(true)
   orden       Int       @default(0)
   creado_en   DateTime  @default(now()) @db.Timestamptz(3)
 
   usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
 
   @@index([usuario_id])
+  @@index([usuario_id, tipo])
   @@map("experiencias")
 }
 
@@ -761,6 +775,8 @@ model Proyecto {
   destacado      Boolean   @default(false)
   /// Lo ocultó el equipo después de un reporte.
   oculto         Boolean   @default(false)
+  /// Se ve en el CV y en el portafolio públicos (si no, solo lo ve su dueña).
+  publico        Boolean   @default(true)
   orden          Int       @default(0)
   creado_en      DateTime  @default(now()) @db.Timestamptz(3)
   actualizado_en DateTime  @default(now()) @updatedAt @db.Timestamptz(3)
@@ -769,6 +785,55 @@ model Proyecto {
 
   @@index([usuario_id])
   @@map("proyectos")
+}
+
+/// El CV de la Plaza: acerca de mí, habilidades, idiomas y el PDF (bucket `cvs`), cada parte con su «público».
+/// La tabla es privada (la dueña y el árbitro); los demás leen la vista `cvs_publicos`.
+model Cv {
+  usuario_id           String   @id @db.Uuid
+  acerca_de            String?
+  acerca_publico       Boolean  @default(true)
+  habilidades          String[] @default([])
+  habilidades_publicas Boolean  @default(true)
+  /// [{ idioma, nivel }]
+  idiomas              Json     @default("[]")
+  idiomas_publicos     Boolean  @default(true)
+  /// «<usuario>/<uuid>.pdf» en el bucket público `cvs`.
+  pdf_ruta             String?
+  pdf_publico          Boolean  @default(true)
+  /// Lo ocultó el equipo después de un reporte.
+  oculto               Boolean  @default(false)
+  creado_en            DateTime @default(now()) @db.Timestamptz(3)
+  actualizado_en       DateTime @default(now()) @updatedAt @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+
+  @@map("cvs")
+}
+
+/// «Trabajos verificados»: un pedido terminado que la persona eligió mostrar en su perfil público.
+/// Solo lleva lo que se muestra (título del servicio, fecha y transacción); nunca el monto ni el detalle.
+model TrabajoPublico {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id   String   @db.Uuid
+  pedido_id    String   @db.Uuid
+  /// proveedor | cliente: en qué papel participó la persona.
+  rol          String
+  titulo       String
+  terminado_en DateTime @db.Timestamptz(3)
+  /// Transacción que cerró el pedido (verificada en la red). null en los pedidos de ejemplo.
+  tx_hash      String?
+  /// Lo ocultó el equipo después de un reporte.
+  oculto       Boolean  @default(false)
+  orden        Int      @default(0)
+  creado_en    DateTime @default(now()) @db.Timestamptz(3)
+
+  usuario Usuario @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
+  pedido  Pedido  @relation(fields: [pedido_id], references: [id], onDelete: Cascade)
+
+  @@unique([usuario_id, pedido_id])
+  @@index([pedido_id])
+  @@map("trabajos_publicos")
 }
 
 /// Chat por cercanía: se guarda 7 días (solo para revisar reportes) y después se borra solo.

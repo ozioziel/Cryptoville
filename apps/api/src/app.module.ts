@@ -17,6 +17,8 @@ import { ServicesModule } from './services/services.module';
 import { LocalesModule } from './locales/locales.module';
 import { RampasModule } from './rampas/rampas.module';
 import { PortafolioModule } from './portafolio/portafolio.module';
+import { TrabajosModule } from './trabajos/trabajos.module';
+import { CvModule } from './cv/cv.module';
 import { CercaniaModule } from './cercania/cercania.module';
 import { SupabaseModule } from './supabase/supabase.service';
 import { UploadsModule } from './uploads/uploads.module';
@@ -62,6 +64,8 @@ const config = leerConfiguracion();
     LocalesModule,
     RampasModule,
     PortafolioModule,
+    TrabajosModule,
+    CvModule,
     CercaniaModule,
     OrdersModule,
     BusquedasModule,
