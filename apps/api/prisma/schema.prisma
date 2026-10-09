@@ -179,20 +179,22 @@ model DesafioLogin {
 }
 
 model Local {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  usuario_id  String   @db.Uuid
-  nombre      String
-  barrio      Barrio
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  usuario_id   String    @db.Uuid
+  nombre       String
+  barrio       Barrio
   /// Número de lote dentro de su villa (1, 2, 3…, sin tope). Define el lugar de la casa en el mapa.
-  lote        Int
+  lote         Int
   /// Una de las categorías de su villa (CHECK "locales_categoria_check").
-  categoria   String
-  color       String   @default("#e07a5f")
+  categoria    String
+  color        String    @default("#e07a5f")
   /// Casa personalizada (piezas de su villa). Si es null, se usa la casa por defecto de la villa.
-  apariencia  Json?
-  descripcion String?
-  activo      Boolean  @default(true)
-  creado_en   DateTime @default(now()) @db.Timestamptz(3)
+  apariencia   Json?
+  descripcion  String?
+  activo       Boolean   @default(true)
+  creado_en    DateTime  @default(now()) @db.Timestamptz(3)
+  /// Eliminado por su dueño: deja de verse y libera el lote; los pedidos terminados lo siguen nombrando.
+  archivado_en DateTime? @db.Timestamptz(3)
 
   usuario    Usuario         @relation(fields: [usuario_id], references: [id], onDelete: Cascade)
   servicios  Servicio[]
@@ -200,8 +202,10 @@ model Local {
   /// El pago con que se abrió (solo los locales extra).
   pago       PagoPlataforma?
 
-  @@unique([barrio, lote])
+  /// Único solo entre los no archivados (índice parcial escrito a mano en la migración 20261010000100).
+  @@index([barrio, lote], map: "locales_barrio_lote_key")
   @@index([usuario_id])
+  @@index([archivado_en])
   @@map("locales")
 }
 

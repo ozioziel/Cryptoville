@@ -3,6 +3,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   HttpCode,
@@ -22,6 +23,7 @@ import {
   BARRIOS_ANTERIORES,
   COLORES_LOCAL,
   COLORES_LOCAL_ANTERIORES,
+  ESTADOS_FINALES,
   LISTA_BARRIOS,
   esCategoriaDe,
   normalizarAparienciaCasa,
@@ -106,6 +108,9 @@ export interface CupoLocales {
  * a la tesorería (verificado en la red), y un tope absoluto. Los números están en packages/shared/src/reglas.ts.
  * El local principal es el más antiguo: es el que usa `PUT /api/mi-local`, que sigue funcionando igual.
  */
+/** Los locales archivados (eliminados por su dueño) no cuentan para nada: ni cupo, ni lotes, ni el principal. */
+const SIN_ARCHIVAR = { archivado_en: null } as const;
+
 @Injectable()
 export class LocalesService {
   constructor(
@@ -120,24 +125,24 @@ export class LocalesService {
   }
 
   propios(usuarioId: string): Promise<Local[]> {
-    return this.prisma.local.findMany({ where: { usuario_id: usuarioId }, orderBy: [{ creado_en: 'asc' }, { id: 'asc' }] });
+    return this.prisma.local.findMany({ where: { usuario_id: usuarioId, ...SIN_ARCHIVAR }, orderBy: [{ creado_en: 'asc' }, { id: 'asc' }] });
   }
 
   principal(usuarioId: string): Promise<Local | null> {
-    return this.prisma.local.findFirst({ where: { usuario_id: usuarioId }, orderBy: [{ creado_en: 'asc' }, { id: 'asc' }] });
+    return this.prisma.local.findFirst({ where: { usuario_id: usuarioId, ...SIN_ARCHIVAR }, orderBy: [{ creado_en: 'asc' }, { id: 'asc' }] });
   }
 
   /** Un local de la persona (para editarlo o usarlo en una propuesta). */
   async propio(yo: Pick<Usuario, 'id'>, id: string): Promise<Local> {
     const local = await this.prisma.local.findUnique({ where: { id } });
-    if (!local) throw new NotFoundException('No existe ese local');
+    if (!local || local.archivado_en) throw new NotFoundException('No existe ese local');
     if (local.usuario_id !== yo.id) throw new ForbiddenException('Ese local no es tuyo');
     return local;
   }
 
   async cupo(yo: Pick<Usuario, 'id'>): Promise<CupoLocales> {
     const [total, pagos] = await Promise.all([
-      this.prisma.local.count({ where: { usuario_id: yo.id } }),
+      this.prisma.local.count({ where: { usuario_id: yo.id, ...SIN_ARCHIVAR } }),
       this.prisma.pagoPlataforma.count({ where: { usuario_id: yo.id, concepto: 'local_extra', local_id: null } }),
     ]);
     const r = this.reglas;
@@ -202,14 +207,14 @@ export class LocalesService {
     // Local nuevo o cambio de villa: primer lote libre (con reintento si otro lo toma a la vez).
     for (let intento = 0; intento < 5; intento++) {
       const ocupados = await this.prisma.local.findMany({
-        where: { barrio: dto.barrio, ...(actual ? { NOT: { id: actual.id } } : {}) },
+        where: { barrio: dto.barrio, ...SIN_ARCHIVAR, ...(actual ? { NOT: { id: actual.id } } : {}) },
         select: { lote: true },
       });
       const lote = primerLoteLibre(ocupados.map((o) => o.lote));
       try {
         if (actual) return await this.prisma.local.update({ where: { id: actual.id }, data: { ...datos, lote } });
         return await this.prisma.$transaction(async (tx) => {
-          const total = await tx.local.count({ where: { usuario_id: yo.id } });
+          const total = await tx.local.count({ where: { usuario_id: yo.id, ...SIN_ARCHIVAR } });
           const local = await tx.local.create({ data: { ...datos, lote, usuario_id: yo.id } });
           if (total >= this.reglas.gratis) {
             // Se toma un pago sin usar; si dos pestañas abren a la vez, solo una lo consigue.
@@ -224,6 +229,30 @@ export class LocalesService {
       }
     }
     throw new ConflictException('No se pudo asignar un lote, intenta de nuevo');
+  }
+
+  /**
+   * Eliminar un local = archivarlo (para no romper el historial de sus pedidos):
+   * - no se puede mientras alguno de sus servicios tenga pedidos que no terminaron;
+   * - deja de verse en la villa (activo = false), libera su lote y desactiva sus servicios;
+   * - si era un local pagado, su pago vuelve a servir para abrir otro;
+   * - sus propuestas a «Se busca» que siguen enviadas se retiran (no pueden nacer pedidos de un local que ya no está).
+   */
+  async archivar(yo: Pick<Usuario, 'id'>, id: string): Promise<{ archivado: true; propuestas_retiradas: number }> {
+    await this.propio(yo, id);
+    const enCurso = await this.prisma.pedido.count({ where: { servicio: { local_id: id }, estado: { notIn: [...ESTADOS_FINALES] } } });
+    if (enCurso > 0) {
+      throw new ConflictException(
+        `Tiene ${enCurso === 1 ? 'un pedido en curso' : `${enCurso} pedidos en curso`}: podrás eliminarlo cuando ${enCurso === 1 ? 'termine' : 'terminen'}`,
+      );
+    }
+    const [, , , retiradas] = await this.prisma.$transaction([
+      this.prisma.local.update({ where: { id }, data: { archivado_en: new Date(), activo: false } }),
+      this.prisma.servicio.updateMany({ where: { local_id: id }, data: { activo: false } }),
+      this.prisma.pagoPlataforma.updateMany({ where: { local_id: id }, data: { local_id: null } }),
+      this.prisma.propuesta.updateMany({ where: { local_id: id, estado: 'enviada' }, data: { estado: 'retirada' } }),
+    ]);
+    return { archivado: true, propuestas_retiradas: retiradas.count };
   }
 
   /**
@@ -301,6 +330,13 @@ export class LocalesController {
   @Put('locales/:id')
   async editar(@UsuarioActual() yo: Usuario, @Param('id', ParseUUIDPipe) id: string, @Body() dto: LocalDto) {
     return serializar(await this.locales.guardar(yo, await this.locales.propio(yo, id), dto));
+  }
+
+  /** Eliminar (archivar) uno de mis locales. Devuelve también el cupo nuevo. */
+  @Delete('locales/:id')
+  async eliminar(@UsuarioActual() yo: Usuario, @Param('id', ParseUUIDPipe) id: string) {
+    const r = await this.locales.archivar(yo, id);
+    return { ...r, cupo: await this.locales.cupo(yo) };
   }
 
   /** Registrar el pago de un local extra hecho fuera de la app (Stellar Lab u otra wallet), con su hash. */

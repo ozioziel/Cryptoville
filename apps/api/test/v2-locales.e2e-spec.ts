@@ -166,3 +166,73 @@ describe('propuestas a un «Se busca» con local y plan', () => {
     expect(String(fases[0].monto_usdc)).toBe('60');
   });
 });
+
+describe('eliminar un local (archivarlo)', () => {
+  it('no deja con pedidos en curso; al archivar libera el lote, apaga sus servicios, devuelve el pago y retira sus propuestas', async () => {
+    const s = await t.entrar();
+    const cliente = await t.entrar();
+    const otro = await t.entrar();
+    const principal = await t.http().put('/api/mi-local').set(con(s)).send({ nombre: 'Principal', barrio: 'audiovisual' }).expect(200);
+    const segundo = (await abrir(s, 'Para borrar', 'academy').expect(201)).body as { id: string; lote: number };
+    const servicio = await t
+      .http()
+      .post('/api/servicios')
+      .set(con(s))
+      .send({ local_id: segundo.id, titulo: 'Clase', descripcion: 'Una descripción suficientemente larga', precio_usdc: '5', dias_entrega: 2 })
+      .expect(201);
+
+    // Solo su dueño.
+    await t.http().delete(`/api/locales/${segundo.id}`).set(con(otro)).expect(403);
+
+    // Con un pedido sin terminar, no se puede.
+    const pedido = await t.http().post('/api/pedidos').set(con(cliente)).send({ servicio_id: servicio.body.id, detalle: 'Necesito esto para el viernes' }).expect(201);
+    const bloqueado = await t.http().delete(`/api/locales/${segundo.id}`).set(con(s)).expect(409);
+    expect(bloqueado.body.mensaje).toMatch(/pedido en curso/);
+    await t.http().post(`/api/pedidos/${pedido.body.id}/cancelar`).set(con(cliente)).expect(200);
+
+    // Un pago de local extra atado a este local, y una propuesta enviada desde él.
+    await t.prisma.pagoPlataforma.create({
+      data: { usuario_id: s.id, concepto: 'local_extra', monto_usdc: 5, tx_hash: hash(), red: 'testnet', direccion: s.par.publicKey(), local_id: segundo.id },
+    });
+    const autor = await t.entrar();
+    const busqueda = await t
+      .http()
+      .post('/api/busquedas')
+      .set(con(autor))
+      .send({ titulo: 'Necesito clases', descripcion: 'Busco clases particulares de algo', barrio: 'academy', categoria: 'cursos', presupuesto_usdc: '20', fecha_limite: fecha(10) })
+      .expect(201);
+    await t
+      .http()
+      .post(`/api/busquedas/${busqueda.body.id}/propuestas`)
+      .set(con(s))
+      .send({ monto_usdc: '15', dias_entrega: 3, mensaje: 'Te puedo ayudar con eso, tengo experiencia.', local_id: segundo.id })
+      .expect(201);
+
+    const r = await t.http().delete(`/api/locales/${segundo.id}`).set(con(s)).expect(200);
+    expect(r.body).toMatchObject({ archivado: true, propuestas_retiradas: 1 });
+    expect(r.body.cupo.total).toBe(1);
+
+    const archivado = await t.prisma.local.findUniqueOrThrow({ where: { id: segundo.id }, include: { servicios: true } });
+    expect(archivado.archivado_en).not.toBeNull();
+    expect(archivado.activo).toBe(false);
+    expect(archivado.servicios.every((x) => !x.activo)).toBe(true);
+    expect(await t.prisma.pagoPlataforma.count({ where: { usuario_id: s.id, local_id: null } })).toBe(1);
+    expect((await t.prisma.propuesta.findFirstOrThrow({ where: { busqueda_id: busqueda.body.id } })).estado).toBe('retirada');
+
+    // Ya no es suyo para editar, no aparece en «Mis locales» y el principal sigue siendo el mismo.
+    await t.http().put(`/api/locales/${segundo.id}`).set(con(s)).send({ nombre: 'Volver', barrio: 'academy' }).expect(404);
+    // Sus servicios tampoco se reactivan ni se editan.
+    await t.http().patch(`/api/servicios/${servicio.body.id}`).set(con(s)).send({ activo: true }).expect(404);
+    const mios = await t.http().get('/api/mis-locales').set(con(s)).expect(200);
+    expect(mios.body.locales.map((l: { id: string }) => l.id)).toEqual([principal.body.id]);
+    // La villa lo deja de mostrar (la web lee los activos).
+    const enVilla = await t.prisma.local.count({ where: { id: segundo.id, activo: true } });
+    expect(enVilla).toBe(0);
+
+    // El lote queda libre: el próximo local de esa villa lo puede tomar.
+    const ocupadosAntes = await t.prisma.local.findMany({ where: { barrio: 'academy', archivado_en: null }, select: { lote: true } });
+    const nuevo = (await abrir(s, 'Nuevo en Academy', 'academy').expect(201)).body as { lote: number };
+    expect(ocupadosAntes.map((o) => o.lote)).not.toContain(nuevo.lote);
+    if (!ocupadosAntes.some((o) => o.lote === segundo.lote)) expect(nuevo.lote).toBeLessThanOrEqual(segundo.lote);
+  });
+});
