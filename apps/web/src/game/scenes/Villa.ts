@@ -14,7 +14,7 @@ import {
 } from '@cryptoville/shared';
 import Phaser from 'phaser';
 import { ALTO_CASA, ANCHO_CASA, COLOR_SE_BUSCA, LETRERO_CASA, colorTextoLetrero, crearCasa } from '../../arte/casa';
-import { crearPersona } from '../../arte/persona';
+import { asegurarPersona } from '../animacionPersona';
 import { hashTexto, azar } from '../../arte/svg';
 import {
   ALTO_ARBOL,
@@ -517,11 +517,11 @@ export class Villa extends Phaser.Scene {
   }
 
   private clavePersona(a: AparienciaPersona): string {
-    return `persona:${hashTexto(JSON.stringify(a))}@${this.resolucion}`;
+    return `persona-perfiles:${hashTexto(JSON.stringify(a))}@${this.resolucion}`;
   }
 
   private texturaPersona(clave: string, a: AparienciaPersona): Promise<boolean> {
-    return asegurarTextura(this, clave, (t) => crearPersona(a, { tamano: t }), ANCHO_JUGADOR, ALTO_JUGADOR, this.resolucion);
+    return asegurarPersona(this, clave, a, ANCHO_JUGADOR, ALTO_JUGADOR, this.resolucion);
   }
 
   private cambiarPersona(a: AparienciaPersona): void {

@@ -1,5 +1,6 @@
 import { aparienciaDeUsuario, type AparienciaPersona } from '@cryptoville/shared';
 import Phaser from 'phaser';
+import { cuadroPersona, rumboPersona, type RumboPersona } from '../animacionPersona';
 import { LADO_INSIGNIA, crearInsignia } from '../../arte/villa';
 import type { PersonaEnLinea } from '../EventBus';
 import { asegurarTextura, marcarPermanente, soltarTextura, texto, usarTextura } from '../texturas';
@@ -90,6 +91,8 @@ class Globo {
 }
 
 interface Otra {
+  rumbo: RumboPersona;
+  inicioPaso: number | null;
   datos: PersonaEnLinea;
   clave: string;
   sprite: Phaser.GameObjects.Image | null;
@@ -165,9 +168,16 @@ export class PersonasEnVilla {
     for (const otra of this.otras.values()) {
       if (otra.objetivo) {
         const dx = otra.objetivo.x - otra.x;
+        const dy = otra.objetivo.y - otra.y;
+        const caminando = Math.hypot(dx, dy) > 0.5;
+        if (caminando) {
+          otra.rumbo = rumboPersona(dx, dy, otra.rumbo);
+          otra.inicioPaso ??= ahora;
+        } else otra.inicioPaso = null;
         otra.x += dx * k;
         otra.y += (otra.objetivo.y - otra.y) * k;
-        if (otra.sprite && Math.abs(dx) > 0.5) otra.sprite.setFlipX(dx < 0);
+        const cuadro = cuadroPersona(otra.rumbo, caminando, ahora - (otra.inicioPaso ?? ahora));
+        if (otra.sprite?.texture.has(cuadro)) otra.sprite.setFrame(cuadro);
       }
     }
     // Las más cercanas primero (cada medio segundo alcanza).
@@ -219,6 +229,8 @@ export class PersonasEnVilla {
     const clave = this.o.clavePersona(apariencia);
     usarTextura(clave);
     const otra: Otra = {
+      rumbo: anterior?.rumbo ?? 'frente',
+      inicioPaso: null,
       datos: p,
       clave,
       sprite: null,

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { cuadroPersona, rumboPersona, type RumboPersona } from '../animacionPersona';
 
 /** Velocidad al caminar, en píxeles del mundo por segundo. */
 const VELOCIDAD = 230;
@@ -10,6 +11,8 @@ export const ALTO_JUGADOR = 70;
 export class Jugador extends Phaser.Physics.Arcade.Sprite {
   private paso?: Phaser.Tweens.Tween;
   private escalaBase = 1;
+  private rumbo: RumboPersona = 'frente';
+  private inicioPaso: number | null = null;
 
   /** `clave` es una textura de persona de ANCHO_JUGADOR × ALTO_JUGADOR dibujada con `resolucion`. */
   constructor(escena: Phaser.Scene, x: number, y: number, clave: string, resolucion: number) {
@@ -29,18 +32,25 @@ export class Jugador extends Phaser.Physics.Arcade.Sprite {
     if (largo < 0.15) {
       cuerpo.setVelocity(0, 0);
       this.detenerPaso();
+      this.inicioPaso = null;
+      this.mostrarCuadro(false);
       return;
     }
     const factor = Math.min(1, largo) / largo;
     cuerpo.setVelocity(dx * factor * VELOCIDAD, dy * factor * VELOCIDAD);
-    if (Math.abs(dx) > 0.1) this.setFlipX(dx < 0);
-    this.iniciarPaso();
+    this.rumbo = rumboPersona(dx, dy, this.rumbo);
+    this.inicioPaso ??= this.scene.time.now;
+    this.setFlipX(false);
+    this.mostrarCuadro(true);
+    if (this.rumbo === 'frente') this.iniciarPaso();
+    else this.detenerPaso();
   }
 
   /** Cambia la persona (por ejemplo, después de editarla en el perfil). */
   cambiarTextura(clave: string, resolucion: number): void {
     this.setTexture(clave);
     this.ajustar(resolucion);
+    this.mostrarCuadro(false);
   }
 
   /**
@@ -59,6 +69,11 @@ export class Jugador extends Phaser.Physics.Arcade.Sprite {
     const cuerpo = this.body as Phaser.Physics.Arcade.Body;
     cuerpo.setSize(24 * resolucion, 12 * resolucion);
     cuerpo.setOffset(11 * resolucion, 55 * resolucion);
+  }
+
+  private mostrarCuadro(caminando: boolean): void {
+    const cuadro = cuadroPersona(this.rumbo, caminando, this.scene.time.now - (this.inicioPaso ?? this.scene.time.now));
+    if (this.texture.has(cuadro)) this.setFrame(cuadro);
   }
 
   private iniciarPaso(): void {
