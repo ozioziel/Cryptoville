@@ -17,6 +17,7 @@ export interface LocalDeProveedor {
   barrio: Barrio;
   lote: number;
   activo: boolean;
+  usuario_id: string;
 }
 
 export interface PropuestaDetalle extends Propuesta {
@@ -70,7 +71,7 @@ export async function cargarBusqueda(id: string): Promise<BusquedaDetalle | null
     .from('busquedas')
     .select(
       `*, autor:usuarios!busquedas_autor_id_fkey(${CAMPOS_USUARIO}), ` +
-        `propuestas(*, local:locales!propuestas_local_id_fkey(id, nombre, barrio, lote, activo), proveedor:usuarios!propuestas_proveedor_id_fkey(${CAMPOS_USUARIO}))`,
+        `propuestas(*, local:locales!propuestas_local_id_fkey(id, nombre, barrio, lote, activo, usuario_id), proveedor:usuarios!propuestas_proveedor_id_fkey(${CAMPOS_USUARIO}))`,
     )
     .eq('id', id)
     .maybeSingle();

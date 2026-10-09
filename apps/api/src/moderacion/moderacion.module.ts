@@ -25,7 +25,7 @@ import { UsuarioActual } from '../common/usuario-actual';
 import { Prisma, type Usuario } from '../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-export const TIPOS_REPORTE = ['local', 'foto', 'busqueda', 'resena', 'mensaje', 'persona', 'proyecto', 'chat'] as const;
+export const TIPOS_REPORTE = ['local', 'foto', 'busqueda', 'resena', 'mensaje', 'persona', 'proyecto', 'chat', 'trabajo_publico', 'cv'] as const;
 export type TipoReporte = (typeof TIPOS_REPORTE)[number];
 export const MOTIVOS_REPORTE = ['estafa', 'ofensivo', 'spam', 'ilegal', 'suplantacion', 'derechos', 'otro'] as const;
 
@@ -99,7 +99,7 @@ export class ModeracionService {
       case 'persona':
         return (await this.prisma.usuario.findUnique({ where: { id: uuid }, select: { id: true } }))?.id ?? null;
       default:
-        // proyecto y chat: los resuelven sus módulos (portafolio y chat por cercanía) con `registrar`.
+        // proyecto, chat, trabajo_publico y cv: los resuelven sus módulos (portafolio, chat por cercanía, trabajos y CV) con `registrar`.
         return this.duenos.get(tipo)?.(uuid) ?? null;
     }
   }

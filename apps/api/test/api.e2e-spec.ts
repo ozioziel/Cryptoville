@@ -224,8 +224,9 @@ describe('disputas y permisos del árbitro', () => {
 });
 
 describe('villas, categorías y lotes', () => {
+  // Los locales archivados (eliminados) dejan su lote libre.
   const lotesDe = async (barrio: Barrio) =>
-    (await prisma.local.findMany({ where: { barrio }, select: { lote: true } })).map((l) => l.lote);
+    (await prisma.local.findMany({ where: { barrio, archivado_en: null }, select: { lote: true } })).map((l) => l.lote);
 
   it('cada villa numera sus lotes desde 1, la casa conserva su lote y se reutilizan los huecos', async () => {
     const villa: Barrio = 'audiovisual';

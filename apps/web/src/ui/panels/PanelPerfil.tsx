@@ -79,7 +79,10 @@ export function PanelPerfil() {
           <Icono nombre="casa" /> {locales.length ? `Mis locales (${locales.length})` : 'Abrir mi local'}
         </button>
         <button type="button" className="boton" onClick={() => abrir({ tipo: 'mi-portafolio' })}>
-          <Icono nombre="cuadro" /> Mi portafolio
+          <Icono nombre="cuadro" /> Mi CV y portafolio
+        </button>
+        <button type="button" className="boton" onClick={() => abrir({ tipo: 'mis-trabajos' })}>
+          <Icono nombre="escudo" /> Mis trabajos
         </button>
         <button type="button" className="boton" onClick={() => abrir({ tipo: 'wallets' })}>
           <Icono nombre="copiar" /> Mis wallets

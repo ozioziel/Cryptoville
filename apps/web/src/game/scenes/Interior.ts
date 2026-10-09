@@ -13,6 +13,7 @@ import {
   crearCuadro,
   crearInterior,
 } from '../../arte/casa';
+import { crearInteriorEdificio } from '../../arte/edificio';
 import { asegurarPersona } from '../animacionPersona';
 import { hashTexto } from '../../arte/svg';
 import { emitir, escuchar, type CuadroInterior, type DatosInterior } from '../EventBus';
@@ -28,6 +29,7 @@ interface DatosEscena extends DatosInterior {
 
 /**
  * Interior del local (personalizable desde "Mi local"): piso, paredes, muebles y decoración.
+ * También el del edificio de una persona en la Plaza (`tipo: 'edificio'`): su oficina, con los mismos cuadros.
  * El dueño está adentro mientras el panel del local está abierto; se sale con Esc o cerrando el panel.
  * Si el dueño tiene proyectos destacados en su portafolio, se cuelgan como cuadros en la pared
  * (en lugar de la decoración) y se abren al tocarlos.
@@ -62,10 +64,13 @@ export class Interior extends Phaser.Scene {
     const inicial = medidas();
     const R = resolucionTexturas(inicial.zoom, dpr);
 
+    const esEdificio = datos.tipo === 'edificio';
     const barrio: Barrio = datos.barrio ?? 'audiovisual';
     const casa = normalizarAparienciaCasa(barrio, datos.aparienciaCasa);
     const color = datos.color ?? '#e07a5f';
-    const claveCuarto = `interior:${barrio}:${hashTexto(JSON.stringify([color, casa]))}@${R}`;
+    const claveCuarto = esEdificio ? `interior-edificio@${R}` : `interior:${barrio}:${hashTexto(JSON.stringify([color, casa]))}@${R}`;
+    const dibujarCuarto = (sinDecoracion: boolean) => (t: { ancho: number; alto: number }) =>
+      esEdificio ? crearInteriorEdificio({ tamano: t }) : crearInterior({ barrio, apariencia: casa, color }, { tamano: t, sinDecoracion });
     const dueno = aparienciaDeUsuario({ avatar: datos.avatarDueno, apariencia: datos.aparienciaDueno });
     const jugador = datos.aparienciaJugador ?? aparienciaDeAvatar(datos.avatarJugador ?? 85);
     const persona = (a: AparienciaPersona) => `persona-perfiles:${hashTexto(JSON.stringify(a))}@${R}`;
@@ -77,7 +82,7 @@ export class Interior extends Phaser.Scene {
     const activa = () => this.sys.isActive();
     let cuarto: Phaser.GameObjects.Image | null = null;
     let conCuadros = false;
-    void asegurarTextura(this, claveCuarto, (t) => crearInterior({ barrio, apariencia: casa, color }, { tamano: t }), ANCHO_INTERIOR, ALTO_INTERIOR, R).then((ok) => {
+    void asegurarTextura(this, claveCuarto, dibujarCuarto(false), ANCHO_INTERIOR, ALTO_INTERIOR, R).then((ok) => {
       if (ok && activa() && !conCuadros) cuarto = this.add.image(0, 0, claveCuarto).setOrigin(0).setScale(1 / R).setDepth(0);
     });
 
@@ -86,16 +91,18 @@ export class Interior extends Phaser.Scene {
       this.cuadros.forEach((o) => o.destroy());
       this.cuadros = [];
       if (!lista.length || !activa()) return;
-      // Con cuadros, la pared va sin su decoración para que no se encimen.
-      conCuadros = true;
-      const claveLisa = `${claveCuarto}:lisa`;
-      this.texturas.push(claveLisa);
-      usarTextura(claveLisa);
-      void asegurarTextura(this, claveLisa, (t) => crearInterior({ barrio, apariencia: casa, color }, { tamano: t, sinDecoracion: true }), ANCHO_INTERIOR, ALTO_INTERIOR, R).then((ok) => {
-        if (!ok || !activa()) return;
-        cuarto?.destroy();
-        cuarto = this.add.image(0, 0, claveLisa).setOrigin(0).setScale(1 / R).setDepth(0);
-      });
+      // Con cuadros, la pared del local va sin su decoración para que no se encimen (la del edificio ya está libre).
+      if (!esEdificio) {
+        conCuadros = true;
+        const claveLisa = `${claveCuarto}:lisa`;
+        this.texturas.push(claveLisa);
+        usarTextura(claveLisa);
+        void asegurarTextura(this, claveLisa, dibujarCuarto(true), ANCHO_INTERIOR, ALTO_INTERIOR, R).then((ok) => {
+          if (!ok || !activa()) return;
+          cuarto?.destroy();
+          cuarto = this.add.image(0, 0, claveLisa).setOrigin(0).setScale(1 / R).setDepth(0);
+        });
+      }
       const claveMarco = `cuadro-marco@${R}`;
       this.texturas.push(claveMarco);
       usarTextura(claveMarco);

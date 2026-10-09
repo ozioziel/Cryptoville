@@ -1,10 +1,11 @@
-// Arte de cada villa: colores del suelo y las calles, árboles, faroles, estatua gigante y edificio central.
+// Arte de cada villa (y de la Plaza principal): colores del suelo y las calles, árboles, faroles, estatua gigante
+// y edificio central. La Plaza tiene una paleta propia y neutra (piedra, pizarra y dorado) que combina con las cuatro.
 // La Villa Audiovisual copia la muestra aprobada (docs/propuestas/estilo-visual/muestra-villa-audiovisual.html);
 // las otras tres siguen el mismo nivel de detalle con su paleta y su arquitectura.
 //
 // Las piezas grandes se dibujan en las coordenadas de la muestra (el cine ocupa x 330–590, y 58–332):
 // la escena de Phaser solo las traslada al centro de la villa.
-import type { Barrio } from '@cryptoville/shared';
+import { colorLugar, type Lugar } from '@cryptoville/shared';
 import { TINTA, envolver } from './svg';
 
 const CREMA = '#fdf6e3';
@@ -17,10 +18,11 @@ export interface TemaVilla {
   bordeCalle: string;
   detalleBorde: string;
   lineaCentro: string;
-  estiloCalle: 'pelicula' | 'mosaico' | 'led' | 'adoquin';
+  estiloCalle: 'pelicula' | 'mosaico' | 'led' | 'adoquin' | 'losas';
 }
 
-export const TEMAS: Record<Barrio, TemaVilla> = {
+export const TEMAS: Record<Lugar, TemaVilla> = {
+  plaza: { pasto: '#c9dfb6', plaza: '#ece6da', calle: '#ddd6ca', bordeCalle: '#5b6472', detalleBorde: '#e9b44c', lineaCentro: '#f7f3ea', estiloCalle: 'losas' },
   audiovisual: { pasto: '#c8e4ad', plaza: '#efe6d6', calle: '#dcd1bf', bordeCalle: '#4b4048', detalleBorde: '#efe6d6', lineaCentro: CREMA, estiloCalle: 'pelicula' },
   creativo: { pasto: '#cfe6b0', plaza: '#f6ead8', calle: '#f1e2cf', bordeCalle: '#e8c9a8', detalleBorde: '#e07a5f', lineaCentro: '#fffaf0', estiloCalle: 'mosaico' },
   tech: { pasto: '#c2e0c6', plaza: '#e6edf2', calle: '#cfd8e0', bordeCalle: '#3f4d63', detalleBorde: '#7fd1ff', lineaCentro: '#f4f8fb', estiloCalle: 'led' },
@@ -32,7 +34,7 @@ export const TEMAS: Record<Barrio, TemaVilla> = {
  * mosaico de colores, luces LED o adoquines. Se dibuja una sola vez con patrones SVG,
  * así el juego no vuelve a calcular miles de figuras en cada cuadro.
  */
-export function crearCalle(barrio: Barrio, ancho: number, alto: number, tamano?: { ancho: number; alto: number }): string {
+export function crearCalle(barrio: Lugar, ancho: number, alto: number, tamano?: { ancho: number; alto: number }): string {
   const t = TEMAS[barrio];
   const centro = alto / 2;
   const linea = (color: string, opacidad = 1, grosor = 3) =>
@@ -55,6 +57,16 @@ export function crearCalle(barrio: Barrio, ancho: number, alto: number, tamano?:
         `<rect width="${ancho}" height="12" fill="${t.bordeCalle}"/><rect y="${alto - 12}" width="${ancho}" height="12" fill="${t.bordeCalle}"/>` +
         `<path d="M4 6H${ancho}M4 ${alto - 6}H${ancho}" stroke="${t.detalleBorde}" stroke-width="3" stroke-linecap="round" stroke-dasharray="11 13" opacity=".95"/>` +
         linea(t.lineaCentro, 0.95);
+      break;
+    case 'losas':
+      // Losas de piedra de la Plaza, con bordes de pizarra y tachas doradas.
+      detalle =
+        `<defs><pattern id="losas" width="48" height="28" patternUnits="userSpaceOnUse">` +
+        `<rect x="1" y="1" width="46" height="12" rx="2" fill="#e8e2d6"/><rect x="-23" y="15" width="46" height="12" rx="2" fill="#e8e2d6"/><rect x="25" y="15" width="46" height="12" rx="2" fill="#e8e2d6"/>` +
+        `</pattern></defs>` +
+        `<rect x="0" y="14" width="${ancho}" height="${alto - 28}" fill="url(#losas)"/>` +
+        `<rect width="${ancho}" height="12" fill="${t.bordeCalle}"/><rect y="${alto - 12}" width="${ancho}" height="12" fill="${t.bordeCalle}"/>` +
+        `<path d="M10 6H${ancho}M10 ${alto - 6}H${ancho}" stroke="${t.detalleBorde}" stroke-width="4" stroke-linecap="round" stroke-dasharray="1 23"/>`;
       break;
     case 'adoquin':
       detalle =
@@ -82,9 +94,15 @@ export function crearCalle(barrio: Barrio, ancho: number, alto: number, tamano?:
 export const ANCHO_ARBOL = 60;
 export const ALTO_ARBOL = 70;
 
-export function crearArbol(barrio: Barrio, tamano?: { ancho: number; alto: number }): string {
+export function crearArbol(barrio: Lugar, tamano?: { ancho: number; alto: number }): string {
   let copa: string;
   switch (barrio) {
+    case 'plaza':
+      // Arbusto recortado en su macetero de piedra.
+      copa =
+        `<g stroke="${TINTA}" stroke-width="2"><rect x="17" y="50" width="26" height="12" rx="2" fill="#d9d4ca"/><rect x="27" y="40" width="6" height="11" fill="#8a5a44"/><circle cx="30" cy="27" r="19" fill="#79ad74"/></g>` +
+        `<circle cx="23" cy="20" r="7" fill="#9bc78e"/><path d="M17 56H43" stroke="#bdb6a8" stroke-width="1.5"/>`;
+      break;
     case 'creativo':
       copa =
         `<g stroke="${TINTA}" stroke-width="2"><rect x="26" y="42" width="8" height="20" fill="#8a5a44"/><circle cx="30" cy="30" r="24" fill="#94c97c"/></g>` +
@@ -109,9 +127,14 @@ export function crearArbol(barrio: Barrio, tamano?: { ancho: number; alto: numbe
 export const ANCHO_FAROL = 24;
 export const ALTO_FAROL = 80;
 
-export function crearFarol(barrio: Barrio, tamano?: { ancho: number; alto: number }): string {
+export function crearFarol(barrio: Lugar, tamano?: { ancho: number; alto: number }): string {
   let cuerpo: string;
   switch (barrio) {
+    case 'plaza':
+      cuerpo =
+        `<circle cx="12" cy="14" r="12" fill="${DORADO}" opacity=".3"/><g stroke="${TINTA}" stroke-width="2" stroke-linejoin="round"><rect x="10.5" y="22" width="3" height="50" fill="#3f4a5c"/><rect x="5" y="70" width="14" height="7" rx="2" fill="#3f4a5c"/>` +
+        `<path d="M7 9H17L16 21H8Z" fill="#fbe7b0"/><path d="M5 9H19L12 3Z" fill="#3f4a5c"/></g><circle cx="12" cy="2.5" r="1.8" fill="${DORADO}"/>`;
+      break;
     case 'creativo':
       cuerpo =
         `<circle cx="12" cy="14" r="12" fill="${DORADO}" opacity=".3"/><g stroke="${TINTA}" stroke-width="2" stroke-linejoin="round"><rect x="10" y="22" width="4" height="50" fill="#b85a42"/><rect x="5" y="70" width="14" height="7" rx="2" fill="#b85a42"/>` +
@@ -166,10 +189,25 @@ const PEDESTAL =
   `<rect x="248" y="352" width="104" height="14" rx="7" fill="#ebe3d6"/>` +
   `<rect x="266" y="382" width="68" height="16" rx="3" fill="${DORADO}" stroke-width="1.5"/>`;
 
-export function estatua(barrio: Barrio): Estatua {
+export function estatua(barrio: Lugar): Estatua {
   const g = (contenido: string, extra = '') => `<g stroke="${TINTA}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">${contenido}</g>${extra}`;
   const placa = (texto: string): TextoSobrePieza => ({ x: 300, y: 394, texto, tamano: 9, peso: 700, color: TINTA });
   switch (barrio) {
+    case 'plaza': {
+      // Un apretón de manos en bronce: quien contrata y quien trabaja, de acuerdo. Arriba, una estrella dorada.
+      const contenido = g(
+        PEDESTAL +
+          // Mangas (una de cada lado) con sus puños.
+          `<path d="M252 344L272 354L300 318L282 306Z" fill="#e07a5f"/><path d="M348 344L328 354L300 318L318 306Z" fill="#5f6f86"/>` +
+          `<path d="M278 310L290 320M322 310L310 320" stroke="${CREMA}" stroke-width="5"/>` +
+          // Las manos.
+          `<path d="M284 300Q292 284 306 288L318 296Q322 300 318 306L306 316Q296 320 288 314Z" fill="#c9915e"/>` +
+          `<path d="M298 294Q306 290 312 296M296 302Q306 298 314 304M294 309Q302 306 308 311" stroke-width="1.6" fill="none"/>` +
+          `<path d="M286 298Q284 290 292 288" stroke-width="2" fill="none"/>`,
+        `<path d="M300 268L303 276L311 276L305 281L307 289L300 284L293 289L295 281L289 276L297 276Z" fill="${DORADO}" stroke="${TINTA}" stroke-width="1.5" stroke-linejoin="round"/>`,
+      );
+      return { x: 244, y: 262, ancho: 112, alto: 156, svg: (t) => envolver('244 262 112 156', contenido, t), textos: [placa('PLAZA')] };
+    }
     case 'creativo': {
       // Lápiz y pincel gigantes cruzados.
       const contenido = g(
@@ -237,7 +275,7 @@ export interface EdificioCentral {
   solido: { x: number; y: number; ancho: number; alto: number };
 }
 
-export function edificioCentral(barrio: Barrio): EdificioCentral {
+export function edificioCentral(barrio: Lugar): EdificioCentral {
   const g = (contenido: string) => `<g stroke="${TINTA}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">${contenido}</g>`;
   const pieza = (x: number, y: number, ancho: number, alto: number, contenido: string): PiezaGrande => ({
     x,
@@ -251,6 +289,46 @@ export function edificioCentral(barrio: Barrio): EdificioCentral {
     `<g fill="${DORADO}" stroke="${TINTA}" stroke-width="1.5"><circle cx="420" cy="346" r="4.5"/><circle cx="420" cy="414" r="4.5"/><circle cx="500" cy="346" r="4.5"/><circle cx="500" cy="414" r="4.5"/></g>`;
 
   switch (barrio) {
+    case 'plaza': {
+      // La Casa de la Plaza: columnas, frontón y la torre del reloj.
+      const columnas = [346, 380, 526, 560].map((x) => `<rect x="${x}" y="150" width="14" height="182" fill="#f3efe7"/><rect x="${x - 3}" y="144" width="20" height="8" fill="#f3efe7"/>`).join('');
+      const marcas = Array.from({ length: 12 }, (_, i) => {
+        const a = (i / 12) * Math.PI * 2;
+        return `M${(460 + Math.sin(a) * 15).toFixed(1)} ${(66 - Math.cos(a) * 15).toFixed(1)}L${(460 + Math.sin(a) * 12).toFixed(1)} ${(66 - Math.cos(a) * 12).toFixed(1)}`;
+      }).join('');
+      const cuerpo =
+        g(
+          // Torre del reloj.
+          `<rect x="430" y="28" width="60" height="96" fill="#e9e4da"/><path d="M422 30L460 2L498 30Z" fill="#5f6f86"/>` +
+            `<circle cx="460" cy="66" r="19" fill="${CREMA}"/>` +
+            // Frontón y cuerpo.
+            `<path d="M330 124L460 92L590 124Z" fill="#e9e4da"/><path d="M356 120L460 98L564 120Z" fill="none" stroke-width="1.6"/>` +
+            `<rect x="330" y="124" width="260" height="208" fill="#e9e4da"/><rect x="330" y="124" width="260" height="10" fill="#5f6f86"/>` +
+            `<rect x="348" y="150" width="224" height="54" rx="4" fill="#3f4a5c"/><rect x="352" y="154" width="216" height="46" rx="3" fill="none" stroke="${DORADO}" stroke-width="1.5"/>` +
+            columnas +
+            `<path d="M400 332V250Q400 236 412 236Q424 236 424 250V332Z" fill="#a9c7e0" stroke-width="1.8"/><path d="M496 332V250Q496 236 508 236Q520 236 520 250V332Z" fill="#a9c7e0" stroke-width="1.8"/>` +
+            `<path d="M430 332V256Q430 228 460 228Q490 228 490 256V332Z" fill="#5f6f86"/><path d="M460 230V332" stroke-width="1.8"/>`,
+        ) +
+        `<path d="${marcas}" stroke="${TINTA}" stroke-width="1.6" stroke-linecap="round"/>` +
+        `<path d="M460 66V54M460 66L469 71" stroke="${TINTA}" stroke-width="2.6" stroke-linecap="round"/><circle cx="460" cy="66" r="2" fill="${TINTA}"/>` +
+        `<circle cx="451" cy="246" r="2" fill="${DORADO}"/><circle cx="469" cy="246" r="2" fill="${DORADO}"/>`;
+      const frente =
+        g(`<rect x="416" y="332" width="88" height="10" fill="#efe9de"/><rect x="424" y="342" width="72" height="10" fill="#e5ded1"/><rect x="430" y="352" width="60" height="76" fill="#ddd6ca"/>`) +
+        `<path d="M430 372H490M430 392H490M430 412H490M450 352V372M470 372V392M450 392V412M470 412V428" stroke="#bdb6a8" stroke-width="1.2"/>` +
+        postes;
+      return {
+        nombre: 'Casa de la Plaza',
+        cuerpo: pieza(326, 0, 268, 334, cuerpo),
+        frente: pieza(404, 330, 112, 100, frente),
+        textos: [
+          { x: 460, y: 179, texto: 'PLAZA PRINCIPAL', tamano: 16, peso: 800, color: '#f3d27a', espaciado: 1.6 },
+          { x: 460, y: 194, texto: 'Los CVs de quienes trabajan aquí', tamano: 11, peso: 700, color: '#e9e4da' },
+        ],
+        luces: [],
+        puerta: { x: 460, y: 432 },
+        solido: { x: 330, y: 20, ancho: 260, alto: 310 },
+      };
+    }
     case 'creativo': {
       const dientes = Array.from({ length: 8 }, (_, i) => `<path d="M${336 + i * 32} 124V74L${364 + i * 32} 124Z" fill="#8aa0c8" stroke-width="1.5"/>`).join('');
       const bolitas = ['#e07a5f', DORADO, '#81b29a', '#9b7bc4'];
@@ -395,6 +473,69 @@ export function edificioCentral(barrio: Barrio): EdificioCentral {
       };
     }
   }
+}
+
+// ---------------------------------------------------------------
+// Tablón gigante de afiches (la búsqueda): en cada villa y en la Plaza, a la derecha del edificio central,
+// en el lugar del último farol. En las coordenadas de la muestra.
+// ---------------------------------------------------------------
+
+export const TABLON = { x: 604, y: 288, ancho: 140, alto: 136 } as const;
+/** Dónde se para el jugador para usarlo (como una puerta). */
+export const PUERTA_TABLON = { x: TABLON.x + TABLON.ancho / 2, y: TABLON.y + TABLON.alto + 12 } as const;
+
+/**
+ * Un tablero de madera con techito del color del lugar, el corcho lleno de afiches clavados y un
+ * cartel arriba: «TABLÓN DE AFICHES». Las texturas no cargan fuentes web: el texto usa una del sistema.
+ */
+export function crearTablon(lugar: Lugar, tamano?: { ancho: number; alto: number }): string {
+  const c = colorLugar(lugar);
+  const madera = '#9a7653';
+  const fuente = `font-family="Arial, Helvetica, sans-serif"`;
+  // Afiches: [x, y, ancho, alto, color del papel, giro]
+  const afiches: [number, number, number, number, string, number][] = [
+    [16, 40, 30, 34, '#fffaf0', -4],
+    [52, 36, 34, 26, '#fde9c8', 3],
+    [92, 40, 30, 36, '#e6f1e7', -2],
+    [20, 80, 34, 28, '#e3ecf7', 2],
+    [60, 68, 28, 38, '#fffaf0', -3],
+    [94, 82, 30, 26, '#fbe3dc', 4],
+  ];
+  const papeles = afiches
+    .map(([x, y, w, h, papel, giro], i) => {
+      const cx = x + w / 2;
+      const foto = i % 2 === 0 ? `<rect x="${x + 4}" y="${y + 5}" width="${w - 8}" height="${Math.round(h * 0.36)}" rx="1.5" fill="${[c.colorSuave, '#cfe3d4', '#f6e1a8'][i % 3]}" stroke="none"/>` : '';
+      const lineas = Array.from({ length: i % 2 === 0 ? 2 : 3 }, (_, k) => {
+        const yy = y + (i % 2 === 0 ? h * 0.52 : 8) + k * 6;
+        return `<path d="M${x + 5} ${yy.toFixed(1)}H${x + w - 6 - (k % 2) * 6}" stroke="#b9a98f" stroke-width="1.6" stroke-linecap="round"/>`;
+      }).join('');
+      return (
+        `<g transform="rotate(${giro} ${cx} ${y + h / 2})">` +
+        `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="1.5" fill="${papel}" stroke="${TINTA}" stroke-width="1.4"/>` +
+        foto +
+        lineas +
+        `<circle cx="${cx}" cy="${y + 2}" r="2.6" fill="${[c.color, DORADO, '#e07a5f'][i % 3]}" stroke="${TINTA}" stroke-width="1.1"/>` +
+        `</g>`
+      );
+    })
+    .join('');
+  const cuerpo =
+    `<ellipse cx="70" cy="132" rx="62" ry="5" fill="${TINTA}" opacity=".13"/>` +
+    `<g stroke="${TINTA}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">` +
+    // Patas.
+    `<rect x="18" y="104" width="10" height="28" rx="2" fill="${madera}"/><rect x="112" y="104" width="10" height="28" rx="2" fill="${madera}"/>` +
+    // Tablero, corcho y techito.
+    `<rect x="4" y="22" width="132" height="92" rx="5" fill="${c.colorOscuro}"/>` +
+    `<rect x="10" y="30" width="120" height="78" rx="3" fill="#dcc29a" stroke-width="1.6"/>` +
+    `<path d="M0 24L14 6H126L140 24Z" fill="${c.color}"/>` +
+    `</g>` +
+    // Puntitos del corcho.
+    `<g fill="#c4a87d">${[[24, 64], [84, 32], [118, 66], [48, 104], [104, 100], [72, 60]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="1.1"/>`).join('')}</g>` +
+    papeles +
+    // Cartel de arriba.
+    `<rect x="26" y="9" width="88" height="13" rx="3" fill="${CREMA}" stroke="${TINTA}" stroke-width="1.6"/>` +
+    `<text x="70" y="18.6" text-anchor="middle" ${fuente} font-weight="700" font-size="7.6" letter-spacing=".6" fill="${TINTA}">TABLÓN DE AFICHES</text>`;
+  return envolver(`0 0 ${TABLON.ancho} ${TABLON.alto}`, cuerpo, tamano);
 }
 
 // ---------------------------------------------------------------

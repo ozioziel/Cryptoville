@@ -49,3 +49,11 @@ export function periodo(desde: string, hasta: string | null): string {
   const f = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('es', { month: 'short', year: 'numeric' });
   return `${f(desde)} – ${hasta ? f(hasta) : 'hoy'}`;
 }
+
+/** Fechas de un elemento del CV: «mar. 2019 – hoy», «Emitida en may. 2022» (certificaciones) o «sept. 2021» (premios). */
+export function fechasCv(e: Pick<Experiencia, 'tipo' | 'desde' | 'hasta'>): string {
+  const mes = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString('es', { month: 'short', year: 'numeric' });
+  if (e.tipo === 'premio') return mes(e.desde);
+  if (e.tipo === 'certificacion') return e.hasta ? `Emitida en ${mes(e.desde)} · vence en ${mes(e.hasta)}` : `Emitida en ${mes(e.desde)}`;
+  return periodo(e.desde, e.hasta);
+}

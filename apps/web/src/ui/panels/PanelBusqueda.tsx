@@ -24,6 +24,7 @@ import { Aviso, Avatar, Cargando, Estrellas, Garantia, fechaCorta } from '../com
 import { CartelSeBusca } from '../components/Cartel';
 import { Icono } from '../components/Iconos';
 import { BotonBloquear, BotonReportar, Nombre } from '../components/Confianza';
+import { BotonesIr } from '../components/BotonesIr';
 
 /** «Luego pagas en garantía», «luego pagas por etapas»… */
 const COMO_PAGA: Record<MetodoPago, string> = { directo: 'directo', garantia: 'en garantía', etapas: 'por etapas' };
@@ -164,7 +165,6 @@ function PropuestasRecibidas({
   onElegida: (pedidoId: string) => void;
   onCerrada: () => void;
 }) {
-  const { cerrar, irAlLocal } = useEstado();
   const visibles = b.propuestas.filter((p) => p.estado !== 'retirada');
   const [reputaciones, setReputaciones] = useState<Map<string, Reputacion>>(new Map());
   const [confirmando, setConfirmando] = useState<string | null>(null);
@@ -233,18 +233,7 @@ function PropuestasRecibidas({
               )}
               {p.proyectos?.length > 0 && <ProyectosAdjuntos ids={p.proyectos} />}
               <span className="fila">
-                {local?.activo && (
-                  <button
-                    type="button"
-                    className="boton boton-mini"
-                    onClick={() => {
-                      cerrar();
-                      irAlLocal(local);
-                    }}
-                  >
-                    Ver su local <Icono nombre="flecha" tamano={14} />
-                  </button>
-                )}
+                {local?.activo && <BotonesIr local={local} textoLocal="Ver su local" />}
                 {abierta && p.estado === 'enviada' && confirmando !== p.id && (
                   <button
                     type="button"

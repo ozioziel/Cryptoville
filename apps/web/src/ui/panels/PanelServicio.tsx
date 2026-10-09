@@ -6,6 +6,7 @@ import { api, mensajeDeError } from '../../lib/api';
 import { obtenerConfig, reglas } from '../../lib/config';
 import { useEstado } from '../estado';
 import { Aviso, Avatar, Garantia } from '../components/basicos';
+import { BotonesIr } from '../components/BotonesIr';
 
 /** Detalle de un servicio y formulario para pedirlo. */
 export function PanelServicio({ servicioId }: { servicioId: string }) {
@@ -48,6 +49,9 @@ export function PanelServicio({ servicioId }: { servicioId: string }) {
         <span>
           {local.usuario.nombre} · {local.nombre}
         </span>
+      </div>
+      <div className="fila">
+        <BotonesIr local={local} />
       </div>
       <p className="precio precio-grande">{servicio.precio_usdc} USDC</p>
       <p>{servicio.descripcion}</p>

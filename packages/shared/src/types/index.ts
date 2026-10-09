@@ -228,6 +228,8 @@ export interface Usuario {
   verificado?: boolean;
   /** Suspendida por el equipo. */
   suspendido?: boolean;
+  /** Lote de su edificio en la Plaza principal (si tiene al menos un local). */
+  lote_plaza?: number | null;
   creado_en: string;
 }
 
@@ -258,6 +260,8 @@ export interface Servicio {
   dias_entrega: number;
   foto_url: string | null;
   activo: boolean;
+  /** Cuándo se publicó (para ordenar «más nuevos» en el tablón). */
+  creado_en?: string;
 }
 
 export interface Pedido {

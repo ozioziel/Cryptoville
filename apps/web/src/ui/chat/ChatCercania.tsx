@@ -16,6 +16,7 @@ interface LocalDeLaPersona {
   nombre: string;
   barrio: Barrio;
   lote: number;
+  usuario_id: string;
 }
 
 /**
@@ -25,7 +26,7 @@ interface LocalDeLaPersona {
  */
 export function ChatCercania() {
   const { usuario } = useSesion();
-  const { chatCon, cerrarChat, mensajeCercania, registrarMensaje, abrir, avisar, irAlLocal } = useEstado();
+  const { chatCon, cerrarChat, mensajeCercania, registrarMensaje, abrir, avisar, irAlLocal, edificios } = useEstado();
   const [persona, setPersona] = useState<UsuarioPublico | null>(null);
   const [local, setLocal] = useState<LocalDeLaPersona | null>(null);
   const [mensajes, setMensajes] = useState<MensajeCercania[]>([]);
@@ -45,7 +46,7 @@ export function ChatCercania() {
     const desde = new Date(Date.now() - reglas.diasGuardado * 86_400_000).toISOString();
     void Promise.all([
       supabase().from('usuarios').select('id, nombre, avatar, apariencia, direccion, bio, rol, verificado').eq('id', chatCon).maybeSingle(),
-      supabase().from('locales').select('id, nombre, barrio, lote').eq('usuario_id', chatCon).eq('activo', true).order('creado_en').limit(1),
+      supabase().from('locales').select('id, nombre, barrio, lote, usuario_id').eq('usuario_id', chatCon).eq('activo', true).order('creado_en').limit(1),
       supabase()
         .from('mensajes_cercania')
         .select('id, de_id, para_id, texto, creado_en')
@@ -109,7 +110,7 @@ export function ChatCercania() {
       <nav className="chat-acciones" aria-label="Acciones">
         {local && (
           <button type="button" className="enlace" onClick={() => irAlLocal(local, 'edificio')}>
-            Visitar local
+            {edificios.some((e) => e.usuarioId === local.usuario_id) ? 'Visitar su edificio' : 'Visitar local'}
           </button>
         )}
         <button type="button" className="enlace" onClick={() => abrir({ tipo: 'portafolio', usuarioId: chatCon })}>

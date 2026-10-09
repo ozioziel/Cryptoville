@@ -2,7 +2,7 @@ import { formatoUsdc, type Local, type Reputacion, type Servicio, type Usuario }
 import type { LocalEnMapa } from '../../game/EventBus';
 import { supabase } from '../../lib/supabase';
 
-export type UsuarioPublico = Pick<Usuario, 'id' | 'nombre' | 'avatar' | 'apariencia' | 'direccion' | 'bio' | 'rol' | 'verificado'>;
+export type UsuarioPublico = Pick<Usuario, 'id' | 'nombre' | 'avatar' | 'apariencia' | 'direccion' | 'bio' | 'rol' | 'verificado' | 'lote_plaza'>;
 
 export interface LocalDelPueblo extends Local {
   usuario: UsuarioPublico;
@@ -16,7 +16,7 @@ const normalizarServicio = (s: Servicio): Servicio => ({ ...s, precio_usdc: form
 export async function cargarPueblo(): Promise<LocalDelPueblo[]> {
   const { data, error } = await supabase()
     .from('locales')
-    .select('*, usuario:usuarios(id, nombre, avatar, apariencia, direccion, bio, rol, verificado), servicios(*)')
+    .select('*, usuario:usuarios(id, nombre, avatar, apariencia, direccion, bio, rol, verificado, lote_plaza), servicios(*)')
     .eq('activo', true)
     .order('lote');
   if (error) throw new Error('No se pudo cargar el pueblo');

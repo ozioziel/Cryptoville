@@ -1,7 +1,25 @@
-import { dominioDe, incrustarVideo, reglasDe, videoExterno, type EnlaceProyecto, type Experiencia, type Proyecto, type VideoProyecto } from '@cryptoville/shared';
+import {
+  NIVELES_IDIOMA,
+  NOMBRE_NIVEL_IDIOMA,
+  SECCIONES_CV,
+  TIPOS_EXPERIENCIA,
+  dominioDe,
+  incrustarVideo,
+  reglasDe,
+  videoExterno,
+  type CvPropio,
+  type EnlaceProyecto,
+  type Experiencia,
+  type Idioma,
+  type NivelIdioma,
+  type Proyecto,
+  type TipoExperiencia,
+  type VideoProyecto,
+} from '@cryptoville/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { useSesion } from '../../features/auth/sesion';
-import { cargarPortafolio, cargarProyecto, periodo, type Portafolio } from '../../features/portafolio/datos';
+import { cargarPortafolio, cargarProyecto, fechasCv, type Portafolio } from '../../features/portafolio/datos';
+import { cargarMiCv, urlPdf } from '../../features/plaza/datos';
 import type { UsuarioPublico } from '../../features/services/datos';
 import { api, mensajeDeError } from '../../lib/api';
 import { obtenerConfig, servicios } from '../../lib/config';
@@ -11,6 +29,7 @@ import { Aviso, Avatar, Cargando } from '../components/basicos';
 import { BotonReportar, Nombre } from '../components/Confianza';
 import { Icono } from '../components/Iconos';
 import { ReproductorMux, subirVideo } from '../pagos/Pruebas';
+import { TrabajosVerificados } from './PanelTrabajos';
 
 const TAMANO_FOTO = 2 * 1024 * 1024;
 
@@ -104,6 +123,8 @@ export function PanelPortafolio({ usuarioId }: { usuarioId: string }) {
         </button>
       )}
 
+      <TrabajosVerificados usuarioId={usuarioId} />
+
       <section className="pila-compacta">
         <h3>Proyectos</h3>
         {p.proyectos.length === 0 && <p className="tenue">Todavía no publicó proyectos.</p>}
@@ -114,21 +135,33 @@ export function PanelPortafolio({ usuarioId }: { usuarioId: string }) {
         </div>
       </section>
 
-      <section className="pila-compacta">
-        <h3>Experiencia</h3>
-        {p.experiencias.length === 0 && <p className="tenue">Todavía no cargó su experiencia.</p>}
-        <ul className="lista-simple">
-          {p.experiencias.map((e) => (
-            <li key={e.id} className="pila-compacta">
-              <strong>
-                {e.puesto} · {e.lugar}
-              </strong>
-              <span className="tenue pequeno">{periodo(e.desde, e.hasta)}</span>
-              {e.descripcion && <p className="texto-largo pequeno">{e.descripcion}</p>}
-            </li>
-          ))}
-        </ul>
-      </section>
+      {p.experiencias.length === 0 && (
+        <section className="pila-compacta">
+          <h3>Experiencia</h3>
+          <p className="tenue">Todavía no cargó su experiencia.</p>
+        </section>
+      )}
+      {TIPOS_EXPERIENCIA.map((tipo) => {
+        const lista = p.experiencias.filter((e) => (e.tipo ?? 'trabajo') === tipo);
+        if (!lista.length) return null;
+        return (
+          <section key={tipo} className="pila-compacta">
+            <h3>{SECCIONES_CV[tipo].titulo}</h3>
+            <ul className="lista-simple">
+              {lista.map((e) => (
+                <li key={e.id} className="pila-compacta">
+                  <strong>
+                    {e.puesto} · {e.lugar}
+                  </strong>
+                  <span className="tenue pequeno">{fechasCv(e)}</span>
+                  {e.descripcion && <p className="texto-largo pequeno">{e.descripcion}</p>}
+                  {e.enlace && <EnlaceExterno enlace={{ url: e.enlace, titulo: tipo === 'certificacion' ? 'Ver la credencial' : undefined }} />}
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
     </div>
   );
 }
@@ -187,13 +220,23 @@ export function PanelProyecto({ id }: { id: string }) {
   );
 }
 
-/** Editar mi portafolio: experiencia y proyectos. */
-export function PanelMiPortafolio() {
+/**
+ * «Mi CV y portafolio»: lo que se ve en mi edificio de la Plaza principal (acerca de mí, el PDF, habilidades,
+ * idiomas y las secciones del CV) y mis proyectos. Cada parte se puede dejar privada.
+ * `nuevoProyecto` abre un proyecto nuevo ya con el título («Pasar a mi portafolio» desde «Mis trabajos»):
+ * la persona completa el resto, porque el detalle del pedido es privado.
+ */
+export function PanelMiPortafolio({ nuevoProyecto }: { nuevoProyecto?: { titulo: string } } = {}) {
   const { usuario } = useSesion();
-  const { abrir, avisar } = useEstado();
+  const { abrir, avisar, edificios, cerrar, irAlEdificio } = useEstado();
   const [p, setP] = useState<Portafolio | null>(null);
-  const [editando, setEditando] = useState<{ tipo: 'experiencia'; valor: Experiencia | null } | { tipo: 'proyecto'; valor: Proyecto | null } | null>(null);
-  const r = reglasDe(obtenerConfig().red).portafolio;
+  const [editando, setEditando] = useState<
+    | { tipo: 'experiencia'; seccion: TipoExperiencia; valor: Experiencia | null }
+    | { tipo: 'proyecto'; valor: Proyecto | null; inicial?: { titulo: string } }
+    | null
+  >(nuevoProyecto ? { tipo: 'proyecto', valor: null, inicial: nuevoProyecto } : null);
+  const reglas = reglasDe(obtenerConfig().red);
+  const r = reglas.portafolio;
 
   const cargar = useCallback(async () => {
     if (usuario) setP(await cargarPortafolio(usuario.id));
@@ -202,8 +245,9 @@ export function PanelMiPortafolio() {
     void cargar();
   }, [cargar]);
 
-  if (!usuario) return <p className="tenue">Entra para armar tu portafolio.</p>;
+  if (!usuario) return <p className="tenue">Entra para armar tu CV y tu portafolio.</p>;
   if (!p) return <Cargando />;
+  const tengoEdificio = edificios.some((e) => e.usuarioId === usuario.id);
 
   const listo = async (texto: string) => {
     setEditando(null);
@@ -211,15 +255,82 @@ export function PanelMiPortafolio() {
     await cargar();
   };
 
-  if (editando?.tipo === 'experiencia') return <FormularioExperiencia experiencia={editando.valor} onListo={listo} onCancelar={() => setEditando(null)} />;
-  if (editando?.tipo === 'proyecto') return <FormularioProyecto proyecto={editando.valor} onListo={listo} onCancelar={() => setEditando(null)} />;
+  if (editando?.tipo === 'experiencia') {
+    return <FormularioExperiencia experiencia={editando.valor} tipo={editando.seccion} onListo={listo} onCancelar={() => setEditando(null)} />;
+  }
+  if (editando?.tipo === 'proyecto') {
+    return (
+      <div className="pila">
+        {editando.inicial && (
+          <Aviso tipo="info">
+            Nuevo proyecto con el título de tu trabajo. Cuenta de qué se trató y suma fotos o enlaces: el detalle del pedido es privado y no se copia.
+          </Aviso>
+        )}
+        <FormularioProyecto proyecto={editando.valor} inicial={editando.inicial} onListo={listo} onCancelar={() => setEditando(null)} />
+      </div>
+    );
+  }
 
   return (
     <div className="pila">
-      <p className="tenue pequeno">Tu portafolio se ve en tu perfil, en tus propuestas y como cuadros en la pared de tus locales (los proyectos destacados).</p>
-      <button type="button" className="boton" onClick={() => abrir({ tipo: 'portafolio', usuarioId: usuario.id })}>
-        Ver cómo lo ven los demás
-      </button>
+      <p className="tenue pequeno">
+        Tu CV se ve en tu edificio de la Plaza principal (si tienes al menos un local). Tus proyectos, también en tus propuestas y como cuadros en
+        la pared de tus locales. Lo que marques como privado solo lo ves tú.
+      </p>
+      <div className="fila">
+        {tengoEdificio && (
+          <button
+            type="button"
+            className="boton boton-mini"
+            onClick={() => {
+              cerrar();
+              irAlEdificio(usuario.id);
+            }}
+          >
+            <Icono nombre="edificio" tamano={14} /> Ver mi edificio
+          </button>
+        )}
+        <button type="button" className="boton boton-mini" onClick={() => abrir(tengoEdificio ? { tipo: 'edificio', usuarioId: usuario.id } : { tipo: 'portafolio', usuarioId: usuario.id })}>
+          Ver cómo lo ven los demás
+        </button>
+      </div>
+
+      <EditorCv />
+
+      {TIPOS_EXPERIENCIA.map((tipo) => {
+        const seccion = SECCIONES_CV[tipo];
+        const lista = p.experiencias.filter((e) => (e.tipo ?? 'trabajo') === tipo);
+        return (
+          <section key={tipo} className="pila-compacta">
+            <h3>
+              {seccion.titulo} ({lista.length}/{reglas.cv.maxPorSeccion})
+            </h3>
+            <ul className="lista-tarjetas">
+              {lista.map((e) => (
+                <li key={e.id} className="servicio">
+                  <span className="servicio-texto">
+                    <b>
+                      {e.puesto} · {e.lugar}
+                    </b>
+                    <span className="tenue pequeno">
+                      {fechasCv(e)}
+                      {!e.publico && ' · privado'}
+                    </span>
+                  </span>
+                  <button type="button" className="boton boton-mini" onClick={() => setEditando({ tipo: 'experiencia', seccion: tipo, valor: e })}>
+                    <Icono nombre="editar" tamano={14} /> Editar
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {lista.length < reglas.cv.maxPorSeccion && (
+              <button type="button" className="boton boton-mini" onClick={() => setEditando({ tipo: 'experiencia', seccion: tipo, valor: null })}>
+                <Icono nombre="mas" tamano={14} /> {seccion.sumar}
+              </button>
+            )}
+          </section>
+        );
+      })}
 
       <section className="pila-compacta">
         <h3>
@@ -236,51 +347,273 @@ export function PanelMiPortafolio() {
           </button>
         )}
       </section>
-
-      <section className="pila-compacta">
-        <h3>
-          Experiencia ({p.experiencias.length}/{r.maxExperiencias})
-        </h3>
-        <ul className="lista-tarjetas">
-          {p.experiencias.map((e) => (
-            <li key={e.id} className="servicio">
-              <span className="servicio-texto">
-                <b>
-                  {e.puesto} · {e.lugar}
-                </b>
-                <span className="tenue pequeno">{periodo(e.desde, e.hasta)}</span>
-              </span>
-              <button type="button" className="boton boton-mini" onClick={() => setEditando({ tipo: 'experiencia', valor: e })}>
-                <Icono nombre="editar" tamano={14} /> Editar
-              </button>
-            </li>
-          ))}
-        </ul>
-        {p.experiencias.length < r.maxExperiencias && (
-          <button type="button" className="boton" onClick={() => setEditando({ tipo: 'experiencia', valor: null })}>
-            <Icono nombre="mas" /> Sumar experiencia
-          </button>
-        )}
-      </section>
     </div>
   );
 }
 
-function FormularioExperiencia({ experiencia: e, onListo, onCancelar }: { experiencia: Experiencia | null; onListo: (t: string) => void; onCancelar: () => void }) {
+/** Acerca de mí, habilidades, idiomas y el CV en PDF, cada parte con su «público». */
+function EditorCv() {
+  const { usuario } = useSesion();
+  const { avisar } = useEstado();
+  const r = reglasDe(obtenerConfig().red).cv;
+  const [cv, setCv] = useState<CvPropio | null | undefined>(undefined);
+  const [acerca, setAcerca] = useState('');
+  const [acercaPublico, setAcercaPublico] = useState(true);
+  const [habilidades, setHabilidades] = useState<string[]>([]);
+  const [habilidadesPublicas, setHabilidadesPublicas] = useState(true);
+  const [nueva, setNueva] = useState('');
+  const [idiomas, setIdiomas] = useState<Idioma[]>([]);
+  const [idiomasPublicos, setIdiomasPublicos] = useState(true);
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const cargar = useCallback(async () => {
+    if (!usuario) return;
+    const c = await cargarMiCv(usuario.id);
+    setCv(c);
+    setAcerca(c?.acerca_de ?? '');
+    setAcercaPublico(c?.acerca_publico ?? true);
+    setHabilidades(c?.habilidades ?? []);
+    setHabilidadesPublicas(c?.habilidades_publicas ?? true);
+    setIdiomas(c?.idiomas ?? []);
+    setIdiomasPublicos(c?.idiomas_publicos ?? true);
+  }, [usuario]);
+  useEffect(() => {
+    void cargar();
+  }, [cargar]);
+
+  if (cv === undefined) return <Cargando />;
+
+  const sumarHabilidad = () => {
+    const h = nueva.trim().replace(/\s+/g, ' ');
+    if (!h) return;
+    if (h.length > r.largoHabilidad) return setError(`Cada habilidad puede tener hasta ${r.largoHabilidad} caracteres`);
+    if (habilidades.some((x) => x.toLowerCase() === h.toLowerCase())) return setNueva('');
+    if (habilidades.length >= r.maxHabilidades) return setError(`Puedes poner hasta ${r.maxHabilidades} habilidades`);
+    setHabilidades((x) => [...x, h]);
+    setNueva('');
+    setError(null);
+  };
+
+  const guardar = async () => {
+    setError(null);
+    setOcupado(true);
+    try {
+      await api('/cv', {
+        metodo: 'PUT',
+        cuerpo: {
+          acerca_de: acerca.trim() || null,
+          acerca_publico: acercaPublico,
+          habilidades,
+          habilidades_publicas: habilidadesPublicas,
+          idiomas: idiomas.filter((i) => i.idioma.trim()),
+          idiomas_publicos: idiomasPublicos,
+        },
+      });
+      avisar('Guardaste tu CV', 'exito');
+      await cargar();
+    } catch (e) {
+      setError(mensajeDeError(e));
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const subirPdf = async (archivo: File) => {
+    setError(null);
+    if (archivo.type !== 'application/pdf') return setError('El CV tiene que ser un PDF');
+    if (archivo.size > r.pdfMaxBytes) return setError(`El PDF puede pesar hasta ${Math.round(r.pdfMaxBytes / 1024 / 1024)} MB`);
+    setOcupado(true);
+    const id = avisar('Subiendo tu CV…', 'cargando');
+    try {
+      const s = await api<{ ruta: string; token: string }>('/cv/pdf', { cuerpo: { tipo: archivo.type, tamano: archivo.size } });
+      const { error: e } = await supabase().storage.from('cvs').uploadToSignedUrl(s.ruta, s.token, archivo, { contentType: 'application/pdf' });
+      if (e) throw new Error('No se pudo subir el PDF');
+      await api('/cv/pdf', { metodo: 'PUT', cuerpo: { ruta: s.ruta } });
+      avisar('Tu CV en PDF ya está en tu edificio', 'exito', id);
+      await cargar();
+    } catch (e) {
+      avisar('No se pudo subir el PDF', 'error', id);
+      setError(mensajeDeError(e));
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const cambiarPdfPublico = async (publico: boolean) => {
+    try {
+      await api('/cv', { metodo: 'PUT', cuerpo: { pdf_publico: publico } });
+      await cargar();
+    } catch (e) {
+      setError(mensajeDeError(e));
+    }
+  };
+
+  const quitarPdf = async () => {
+    if (!window.confirm('¿Quitar tu CV en PDF?')) return;
+    try {
+      await api('/cv/pdf', { metodo: 'DELETE' });
+      avisar('Quitaste el PDF de tu CV', 'exito');
+      await cargar();
+    } catch (e) {
+      setError(mensajeDeError(e));
+    }
+  };
+
+  const Publico = ({ valor, onCambiar }: { valor: boolean; onCambiar: (v: boolean) => void }) => (
+    <label className="fila pequeno cv-publico">
+      <input type="checkbox" checked={valor} onChange={(e) => onCambiar(e.target.checked)} /> Público
+    </label>
+  );
+
+  return (
+    <section className="caja pila-compacta editor-cv">
+      <h3>Mi CV</h3>
+      {cv?.oculto && <Aviso tipo="peligro">El equipo ocultó tu CV después de un reporte. Escríbenos desde «Enviar comentarios».</Aviso>}
+
+      <span className="fila espaciada">
+        <span className="etiqueta">CV en PDF</span>
+        {cv?.pdf_ruta && <Publico valor={cv.pdf_publico} onCambiar={(v) => void cambiarPdfPublico(v)} />}
+      </span>
+      <Aviso tipo="aviso">Tu CV será público: no pongas datos que no quieras mostrar (teléfono, dirección…).</Aviso>
+      {cv?.pdf_ruta && (
+        <div className="fila">
+          <a className="boton boton-mini" href={urlPdf(cv.pdf_ruta)} target="_blank" rel="noopener noreferrer">
+            <Icono nombre="documento" tamano={14} /> Ver mi PDF
+          </a>
+          <button type="button" className="boton boton-mini boton-peligro" disabled={ocupado} onClick={() => void quitarPdf()}>
+            Quitar
+          </button>
+        </div>
+      )}
+      <label className="etiqueta">
+        {cv?.pdf_ruta ? 'Cambiar el PDF' : 'Subir mi CV'} (PDF, hasta {Math.round(r.pdfMaxBytes / 1024 / 1024)} MB)
+        <input type="file" className="campo-archivo" accept="application/pdf" disabled={ocupado} onChange={(e) => e.target.files?.[0] && void subirPdf(e.target.files[0])} />
+      </label>
+
+      <span className="fila espaciada">
+        <label className="etiqueta" htmlFor="cv-acerca">
+          Acerca de mí
+        </label>
+        <Publico valor={acercaPublico} onCambiar={setAcercaPublico} />
+      </span>
+      <textarea
+        id="cv-acerca"
+        className="campo"
+        rows={4}
+        maxLength={r.largoAcercaDe}
+        placeholder="Quién eres, en qué trabajas y qué te gusta hacer"
+        value={acerca}
+        onChange={(e) => setAcerca(e.target.value)}
+      />
+
+      <span className="fila espaciada">
+        <span className="etiqueta">
+          Habilidades ({habilidades.length}/{r.maxHabilidades})
+        </span>
+        <Publico valor={habilidadesPublicas} onCambiar={setHabilidadesPublicas} />
+      </span>
+      {habilidades.length > 0 && (
+        <div className="fila chips-cv">
+          {habilidades.map((h) => (
+            <span key={h} className="chip chip-quitable">
+              {h}
+              <button type="button" className="boton-icono" aria-label={`Quitar ${h}`} onClick={() => setHabilidades((x) => x.filter((y) => y !== h))}>
+                <Icono nombre="cerrar" tamano={12} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="fila">
+        <input
+          className="campo"
+          maxLength={r.largoHabilidad}
+          placeholder="Figma, edición de video, inglés técnico…"
+          value={nueva}
+          onChange={(e) => setNueva(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              sumarHabilidad();
+            }
+          }}
+        />
+        <button type="button" className="boton" disabled={!nueva.trim()} onClick={sumarHabilidad}>
+          Sumar
+        </button>
+      </div>
+
+      <span className="fila espaciada">
+        <span className="etiqueta">
+          Idiomas ({idiomas.length}/{r.maxIdiomas})
+        </span>
+        <Publico valor={idiomasPublicos} onCambiar={setIdiomasPublicos} />
+      </span>
+      {idiomas.map((i, n) => (
+        <div key={n} className="fila">
+          <input
+            className="campo"
+            maxLength={40}
+            placeholder="Idioma"
+            aria-label="Idioma"
+            value={i.idioma}
+            onChange={(e) => setIdiomas((x) => x.map((y, k) => (k === n ? { ...y, idioma: e.target.value } : y)))}
+          />
+          <select className="campo" aria-label="Nivel" value={i.nivel} onChange={(e) => setIdiomas((x) => x.map((y, k) => (k === n ? { ...y, nivel: e.target.value as NivelIdioma } : y)))}>
+            {NIVELES_IDIOMA.map((v) => (
+              <option key={v} value={v}>
+                {NOMBRE_NIVEL_IDIOMA[v]}
+              </option>
+            ))}
+          </select>
+          <button type="button" className="boton-icono" aria-label="Quitar idioma" onClick={() => setIdiomas((x) => x.filter((_, k) => k !== n))}>
+            <Icono nombre="cerrar" tamano={14} />
+          </button>
+        </div>
+      ))}
+      {idiomas.length < r.maxIdiomas && (
+        <button type="button" className="boton boton-mini" onClick={() => setIdiomas((x) => [...x, { idioma: '', nivel: 'intermedio' }])}>
+          <Icono nombre="mas" tamano={14} /> Sumar idioma
+        </button>
+      )}
+
+      <button type="button" className="boton boton-primario" disabled={ocupado} onClick={() => void guardar()}>
+        {ocupado ? 'Guardando…' : 'Guardar mi CV'}
+      </button>
+      {error && <Aviso tipo="peligro">{error}</Aviso>}
+    </section>
+  );
+}
+
+function FormularioExperiencia({
+  experiencia: e,
+  tipo,
+  onListo,
+  onCancelar,
+}: {
+  experiencia: Experiencia | null;
+  tipo: TipoExperiencia;
+  onListo: (t: string) => void;
+  onCancelar: () => void;
+}) {
+  const seccion = SECCIONES_CV[tipo];
   const [puesto, setPuesto] = useState(e?.puesto ?? '');
   const [lugar, setLugar] = useState(e?.lugar ?? '');
   const [desde, setDesde] = useState(e?.desde ?? '');
   const [hasta, setHasta] = useState(e?.hasta ?? '');
   const [descripcion, setDescripcion] = useState(e?.descripcion ?? '');
+  const [enlace, setEnlace] = useState(e?.enlace ?? '');
+  const [publico, setPublico] = useState(e?.publico ?? true);
   const [error, setError] = useState<string | null>(null);
 
   const guardar = async () => {
     setError(null);
     try {
-      const cuerpo = { puesto, lugar, desde, hasta: hasta || null, descripcion };
+      const cuerpo = { tipo, puesto, lugar, desde, hasta: seccion.conFin ? hasta || null : null, descripcion, enlace: enlace.trim() || null, publico };
       if (e) await api(`/portafolio/experiencias/${e.id}`, { metodo: 'PUT', cuerpo });
       else await api('/portafolio/experiencias', { cuerpo });
-      onListo(e ? 'Experiencia actualizada' : 'Experiencia guardada');
+      onListo(e ? 'Guardaste los cambios' : `Sumaste a «${seccion.titulo}»`);
     } catch (err) {
       setError(mensajeDeError(err));
     }
@@ -288,27 +621,39 @@ function FormularioExperiencia({ experiencia: e, onListo, onCancelar }: { experi
 
   return (
     <div className="pila">
+      <h3>{seccion.titulo}</h3>
       <label className="etiqueta">
-        Puesto
-        <input className="campo" maxLength={80} placeholder="Diseñadora gráfica" value={puesto} onChange={(x) => setPuesto(x.target.value)} />
+        {seccion.puesto}
+        <input className="campo" maxLength={80} placeholder={seccion.ejemploPuesto} value={puesto} onChange={(x) => setPuesto(x.target.value)} />
       </label>
       <label className="etiqueta">
-        Dónde
-        <input className="campo" maxLength={80} placeholder="Estudio, empresa o por mi cuenta" value={lugar} onChange={(x) => setLugar(x.target.value)} />
+        {seccion.lugar}
+        <input className="campo" maxLength={80} placeholder={seccion.ejemploLugar} value={lugar} onChange={(x) => setLugar(x.target.value)} />
       </label>
       <div className="fila">
         <label className="etiqueta">
-          Desde
+          {seccion.fecha}
           <input className="campo" type="date" value={desde} onChange={(x) => setDesde(x.target.value)} />
         </label>
-        <label className="etiqueta">
-          Hasta (vacío si sigues ahí)
-          <input className="campo" type="date" value={hasta} onChange={(x) => setHasta(x.target.value)} />
-        </label>
+        {seccion.conFin && (
+          <label className="etiqueta">
+            {seccion.fin}
+            <input className="campo" type="date" value={hasta} onChange={(x) => setHasta(x.target.value)} />
+          </label>
+        )}
       </div>
+      {seccion.enlace && (
+        <label className="etiqueta">
+          {seccion.enlace}
+          <input className="campo" type="url" placeholder="https://…" value={enlace} onChange={(x) => setEnlace(x.target.value)} />
+        </label>
+      )}
       <label className="etiqueta">
-        Qué hacías
+        Descripción (opcional)
         <textarea className="campo" rows={3} maxLength={600} value={descripcion} onChange={(x) => setDescripcion(x.target.value)} />
+      </label>
+      <label className="fila pequeno">
+        <input type="checkbox" checked={publico} onChange={(x) => setPublico(x.target.checked)} /> Se ve en mi CV público
       </label>
       <div className="fila">
         <button type="button" className="boton boton-primario" disabled={puesto.trim().length < 2 || lugar.trim().length < 2 || !desde} onClick={guardar}>
@@ -321,7 +666,7 @@ function FormularioExperiencia({ experiencia: e, onListo, onCancelar }: { experi
             onClick={async () => {
               try {
                 await api(`/portafolio/experiencias/${e.id}`, { metodo: 'DELETE' });
-                onListo('Experiencia borrada');
+                onListo('Lo borraste de tu CV');
               } catch (err) {
                 setError(mensajeDeError(err));
               }
@@ -342,11 +687,21 @@ function FormularioExperiencia({ experiencia: e, onListo, onCancelar }: { experi
 /** Lo que se manda a la API por cada video: Mux (id del video subido) o un enlace de YouTube/Vimeo. */
 type VideoEditado = { tipo: 'mux'; video_id: string } | { tipo: 'youtube' | 'vimeo'; url: string };
 
-function FormularioProyecto({ proyecto: p, onListo, onCancelar }: { proyecto: Proyecto | null; onListo: (t: string) => void; onCancelar: () => void }) {
+function FormularioProyecto({
+  proyecto: p,
+  inicial,
+  onListo,
+  onCancelar,
+}: {
+  proyecto: Proyecto | null;
+  inicial?: { titulo: string };
+  onListo: (t: string) => void;
+  onCancelar: () => void;
+}) {
   const { avisar } = useEstado();
   const reglas = reglasDe(obtenerConfig().red);
   const r = reglas.portafolio;
-  const [titulo, setTitulo] = useState(p?.titulo ?? '');
+  const [titulo, setTitulo] = useState(p?.titulo ?? inicial?.titulo.slice(0, 80) ?? '');
   const [descripcion, setDescripcion] = useState(p?.descripcion ?? '');
   const [fecha, setFecha] = useState(p?.fecha ?? '');
   const [fotos, setFotos] = useState<string[]>(p?.fotos ?? []);
@@ -355,6 +710,7 @@ function FormularioProyecto({ proyecto: p, onListo, onCancelar }: { proyecto: Pr
     (p?.videos ?? []).map((v) => (v.tipo === 'mux' ? { tipo: 'mux', video_id: v.video_id } : { tipo: v.tipo, url: v.url })),
   );
   const [destacado, setDestacado] = useState(p?.destacado ?? false);
+  const [publico, setPublico] = useState(p?.publico ?? true);
   const [nuevoEnlace, setNuevoEnlace] = useState('');
   const [nuevoVideo, setNuevoVideo] = useState('');
   const [ocupado, setOcupado] = useState(false);
@@ -414,7 +770,7 @@ function FormularioProyecto({ proyecto: p, onListo, onCancelar }: { proyecto: Pr
     setError(null);
     setOcupado(true);
     try {
-      const cuerpo = { titulo, descripcion, fecha: fecha || null, fotos, enlaces, videos, destacado };
+      const cuerpo = { titulo, descripcion, fecha: fecha || null, fotos, enlaces, videos, destacado, publico };
       if (p) await api(`/portafolio/proyectos/${p.id}`, { metodo: 'PUT', cuerpo });
       else await api('/portafolio/proyectos', { cuerpo });
       onListo(p ? 'Proyecto actualizado' : 'Proyecto publicado');
@@ -515,6 +871,10 @@ function FormularioProyecto({ proyecto: p, onListo, onCancelar }: { proyecto: Pr
       <label className="fila pequeno">
         <input type="checkbox" checked={destacado} onChange={(e) => setDestacado(e.target.checked)} />
         Colgarlo como cuadro en la pared de mis locales (hasta {r.maxDestacados})
+      </label>
+      <label className="fila pequeno">
+        <input type="checkbox" checked={publico} onChange={(e) => setPublico(e.target.checked)} />
+        Se ve en mi CV y en mi portafolio públicos
       </label>
 
       <div className="fila">

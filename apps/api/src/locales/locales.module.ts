@@ -43,6 +43,7 @@ import { CONFIGURACION, type Configuracion } from '../config/configuracion';
 import { Prisma, type Local, type Usuario } from '../generated/prisma/client';
 import { KycService } from '../kyc/kyc.module';
 import { PrismaService } from '../prisma/prisma.service';
+import { PlazaModule, PlazaService } from '../plaza/plaza.module';
 import { invocacionDeSobre } from '../stellar/cadena';
 import { StellarService, type TransaccionConfirmada } from '../stellar/stellar.service';
 import { esWalletDe } from '../wallets/wallets.module';
@@ -117,6 +118,7 @@ export class LocalesService {
     private readonly prisma: PrismaService,
     private readonly kyc: KycService,
     private readonly stellar: StellarService,
+    private readonly plaza: PlazaService,
     @Inject(CONFIGURACION) private readonly config: Configuracion,
   ) {}
 
@@ -166,6 +168,7 @@ export class LocalesService {
    * - Local nuevo o cambio de villa: primer lote libre de la villa (sin tope; se reutilizan los huecos).
    * - Misma villa: la casa conserva su lote.
    * - Del cuarto local en adelante se usa un pago de local extra (y queda atado a ese local).
+   * - Con el primer local, la persona recibe su edificio en la Plaza principal.
    */
   async guardar(yo: Usuario, actual: Local | null, dto: LocalDto): Promise<Local> {
     if (!actual) {
@@ -213,7 +216,7 @@ export class LocalesService {
       const lote = primerLoteLibre(ocupados.map((o) => o.lote));
       try {
         if (actual) return await this.prisma.local.update({ where: { id: actual.id }, data: { ...datos, lote } });
-        return await this.prisma.$transaction(async (tx) => {
+        const nuevo = await this.prisma.$transaction(async (tx) => {
           const total = await tx.local.count({ where: { usuario_id: yo.id, ...SIN_ARCHIVAR } });
           const local = await tx.local.create({ data: { ...datos, lote, usuario_id: yo.id } });
           if (total >= this.reglas.gratis) {
@@ -224,6 +227,9 @@ export class LocalesService {
           }
           return local;
         });
+        // Con su primer local, la persona recibe su edificio en la Plaza principal (si ya lo tiene, no cambia).
+        await this.plaza.asignar(yo.id);
+        return nuevo;
       } catch (e) {
         if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')) throw e;
       }
@@ -252,6 +258,8 @@ export class LocalesService {
       this.prisma.pagoPlataforma.updateMany({ where: { local_id: id }, data: { local_id: null } }),
       this.prisma.propuesta.updateMany({ where: { local_id: id, estado: 'enviada' }, data: { estado: 'retirada' } }),
     ]);
+    // Con el último local, su edificio deja la Plaza.
+    await this.plaza.liberarSiNoTieneLocales(yo.id);
     return { archivado: true, propuestas_retiradas: retiradas.count };
   }
 
@@ -348,5 +356,5 @@ export class LocalesController {
   }
 }
 
-@Module({ controllers: [LocalesController], providers: [LocalesService], exports: [LocalesService] })
+@Module({ imports: [PlazaModule], controllers: [LocalesController], providers: [LocalesService], exports: [LocalesService] })
 export class LocalesModule {}

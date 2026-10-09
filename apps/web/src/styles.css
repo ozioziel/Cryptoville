@@ -2784,3 +2784,490 @@ button.cartel:focus-visible {
     transform-origin: top center;
   }
 }
+
+/* ---------- «Mis trabajos» y «Trabajos verificados» (fase 6) ---------- */
+.trabajo {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  background: #fff;
+}
+.trabajo-cabeza {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.trabajo-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.trabajo-texto b {
+  font-size: 14px;
+}
+.trabajo-persona {
+  gap: 6px;
+}
+.trabajo-monto {
+  flex: none;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--crema);
+  border: 1px dashed var(--linea-fuerte);
+  font-size: 13px;
+}
+.trabajo > .fila {
+  flex-wrap: wrap;
+}
+.trabajos-verificados {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+.trabajo-verificado {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--linea);
+  border-left: 3px solid var(--verde);
+  border-radius: var(--radio);
+  background: #fff;
+}
+/* El sello: un escudo verde dentro de un círculo con borde punteado, como un sello de lacre. */
+.sello-stellar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--verde);
+  box-shadow: 0 0 0 3px #fff, 0 0 0 4px rgba(93, 155, 120, 0.55);
+}
+.trabajo-verificado-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+.trabajo-verificado-texto b {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.sello-enlace {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #3f7a5a;
+  font-weight: 700;
+  text-decoration: none;
+}
+.sello-enlace:hover {
+  text-decoration: underline;
+}
+.trabajo-verificado .enlace-peligro {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font-size: 12px;
+}
+
+/* ---------- Plaza principal y CV (fase 7) ---------- */
+/* La Plaza va primera en el selector, separada de las villas por una línea fina. */
+.villa-plaza {
+  position: relative;
+  margin-right: 6px;
+}
+.villa-plaza::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--linea-fuerte);
+}
+.cv-cabecera {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--linea);
+}
+.cv-seccion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 4px;
+}
+.cv-seccion h3 {
+  margin: 0;
+}
+.cv-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cv-lista li {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+}
+/* Un punto con una línea vertical, como la línea de tiempo de un CV. */
+.cv-punto {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: #5f6f86;
+  box-shadow: 0 0 0 3px #e6eaf0;
+}
+.cv-lista li:not(:last-child) .cv-punto::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 14px;
+  width: 2px;
+  height: calc(100% + 30px);
+  background: #e6eaf0;
+}
+.chips-cv {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip-quitable {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 4px;
+}
+.chip-quitable .boton-icono {
+  width: 18px;
+  height: 18px;
+}
+.cv-servicios {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 6px 0 0;
+  border-top: 1px dashed var(--linea);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cv-local {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+.cv-local .tarjeta-local-color {
+  align-self: stretch;
+}
+.editor-cv h3 {
+  margin: 0;
+}
+.cv-publico {
+  gap: 6px;
+  color: var(--tenue);
+  font-weight: 600;
+}
+/* «Arma tu CV en la Plaza»: aparece una vez, abajo a la izquierda (arriba en el celular). */
+.recomendacion-cv {
+  position: absolute;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + 70px);
+  z-index: 22;
+  display: flex;
+  gap: 12px;
+  max-width: 340px;
+  padding: 14px;
+  background: var(--papel);
+  border: 1px solid var(--linea);
+  border-left: 4px solid #5f6f86;
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+  animation: subir-recomendacion 0.35s ease-out;
+}
+.recomendacion-cv-icono {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: #3f4a5c;
+  background: #e6eaf0;
+}
+@keyframes subir-recomendacion {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (max-width: 700px) {
+  .recomendacion-cv {
+    left: 10px;
+    right: 10px;
+    max-width: none;
+    bottom: auto;
+    top: calc(max(10px, env(safe-area-inset-top)) + 104px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recomendacion-cv {
+    animation: none;
+  }
+}
+
+/* ---------- El tablón gigante de afiches (fase 8): el buscador a pantalla completa ---------- */
+.panel-tablon {
+  background: #8a6a4c;
+  border: 0;
+  box-shadow: inset 0 0 0 6px #7a5a3e, var(--sombra);
+}
+.panel-tablon .panel-cabecera {
+  background: #7a5a3e;
+  border-bottom: 2px solid #5f4530;
+  color: #fdf6e3;
+}
+.panel-tablon .panel-cabecera h2 {
+  color: #fdf6e3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 15px;
+}
+.panel-tablon .panel-cabecera .boton-icono {
+  color: #fdf6e3;
+}
+/* El corcho: color miel con puntitos. */
+.panel-tablon .panel-cuerpo {
+  margin: 0 10px 10px;
+  border-radius: 8px;
+  background-color: #d9bd92;
+  background-image: radial-gradient(#c3a378 1px, transparent 1.6px), radial-gradient(#e6cfa8 1px, transparent 1.6px);
+  background-size: 18px 18px, 23px 23px;
+  background-position: 0 0, 9px 11px;
+  box-shadow: inset 0 2px 6px rgba(59, 42, 37, 0.25);
+}
+.tablon {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 1180px;
+  margin: 0 auto;
+  width: 100%;
+}
+.tablon .pestanas {
+  background: rgba(255, 253, 248, 0.75);
+  max-width: 480px;
+  align-self: center;
+  width: 100%;
+}
+.tablon .campo-con-icono .campo {
+  background: #fffdf8;
+}
+.tablon-subtitulo {
+  font-weight: 700;
+  font-size: 13px;
+  color: #4b3a2e;
+}
+/* Los filtros, en un papel aparte (plegable). */
+.tablon-filtros {
+  background: rgba(255, 253, 248, 0.92);
+  border: 1px solid rgba(59, 42, 37, 0.15);
+  border-radius: var(--radio);
+  padding: 8px 12px;
+}
+.tablon-filtros summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.tablon-filtros summary::-webkit-details-marker {
+  display: none;
+}
+.tablon-filtros-campos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px 12px;
+  padding: 10px 0 4px;
+  align-items: end;
+}
+.tablon-check {
+  min-height: 40px;
+  gap: 8px;
+  font-weight: 600;
+  flex-wrap: nowrap;
+  align-self: end;
+}
+.tablon-check input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+.tablon-cuenta {
+  margin: 0;
+  font-weight: 800;
+  font-size: 13px;
+  color: #4b3a2e;
+}
+.tablon-vacio {
+  margin: 0;
+  padding: 20px;
+  text-align: center;
+  font-weight: 700;
+  color: #4b3a2e;
+}
+.tablon-nota {
+  max-width: 520px;
+}
+/* Afiches: papeles un poco torcidos, cada uno con su chinche del color de la villa. */
+.afiches {
+  list-style: none;
+  margin: 0;
+  padding: 8px 2px 4px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 22px 18px;
+}
+.afiche {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 12px 12px;
+  background: #fffdf8;
+  border: 1px solid rgba(59, 42, 37, 0.18);
+  border-radius: 3px;
+  box-shadow: 0 6px 12px rgba(59, 42, 37, 0.2);
+  transform: rotate(-0.8deg);
+  transition: transform 0.15s ease;
+}
+.afiche:nth-child(2n) {
+  transform: rotate(0.9deg);
+}
+.afiche:nth-child(3n) {
+  transform: rotate(-0.3deg);
+}
+.afiche:hover,
+.afiche:focus-within {
+  transform: rotate(0deg) translateY(-2px);
+  z-index: 1;
+}
+.afiche-chincheta {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 50%;
+  border: 2px solid var(--tinta);
+  box-shadow: 0 2px 3px rgba(59, 42, 37, 0.35);
+}
+.afiche-foto {
+  display: grid;
+  place-items: center;
+  height: 120px;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+}
+.afiche-foto img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.afiche-foto svg {
+  width: 44px;
+  height: 44px;
+  opacity: 0.9;
+}
+.afiche-banda {
+  padding: 6px;
+  border: 1.5px solid var(--tinta);
+  border-radius: 2px;
+  background: var(--dorado);
+  color: #5c4310;
+  font: 800 13px var(--fuente);
+  letter-spacing: 0.18em;
+  cursor: pointer;
+}
+.afiche-titulo {
+  font-size: 15px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.afiche-precio {
+  align-self: flex-start;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #fbe8e1;
+  color: var(--primario-oscuro);
+  font-weight: 800;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.afiche-se-busca .afiche-precio {
+  background: #fbf0d6;
+  color: #8a6412;
+}
+.afiche-persona {
+  gap: 6px;
+}
+.afiche-datos {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.afiche-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 6px;
+}
+@media (max-width: 700px) {
+  .panel-tablon .panel-cuerpo {
+    margin: 0 6px 6px;
+  }
+  .afiches {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+  .afiche-foto {
+    height: 140px;
+  }
+  .tablon-filtros-campos {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .afiche {
+    transition: none;
+  }
+}

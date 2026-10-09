@@ -11,6 +11,9 @@ import { buscarServicios } from './features/services/buscar';
 import type { LocalDelPueblo } from './features/services/datos';
 import { crearCartelSeBusca, crearCasa, crearInterior } from './arte/casa';
 import { ALTO_LAPIZ, ALTO_LIBRO, ANCHO_LAPIZ, ANCHO_LIBRO, crearLapiz, crearLibroAbierto } from './arte/escribir';
+import { crearEdificioPersona, crearInteriorEdificio, letreroEdificio, pisosEdificio } from './arte/edificio';
+import { TABLON, crearTablon, edificioCentral, estatua } from './arte/villa';
+import { edificiosDe } from './features/plaza/datos';
 import { crearPersona } from './arte/persona';
 import * as plano from './game/plano';
 import { resolucionTexturas, zoomPara, zoomVilla } from './game/zoom';
@@ -88,6 +91,26 @@ describe('buscador', () => {
     expect(titulos({ texto: '', barrio: 'todos', categoria: 'todas', precioMaximo: null })).toHaveLength(5);
     // Sin categoría (como las llamadas de antes) no se filtra por categoría.
     expect(titulos({ texto: '', barrio: 'todos', precioMaximo: null })).toHaveLength(5);
+  });
+  it('Plaza: un edificio por persona con locales (y con su lote), contando sus locales', () => {
+    const conLote = (l: LocalDelPueblo, lote: number | null) => ({ ...l, usuario: { ...l.usuario, lote_plaza: lote } });
+    const otro = { ...locales[0], id: 'a2', barrio: 'tech' as const };
+    const edificios = edificiosDe([conLote(locales[1], 2), conLote(locales[0], 1), conLote(otro, 1), conLote(locales[2], null)]);
+    expect(edificios.map((e) => [e.usuarioId, e.lote, e.locales])).toEqual([
+      ['u-a', 1, 2],
+      ['u-b', 2, 1],
+    ]);
+  });
+  it('el tablón: plazo de entrega, solo verificados y orden', () => {
+    const conVerificado = [{ ...locales[0], usuario: { ...locales[0].usuario, verificado: true } }, locales[1], locales[2]];
+    conVerificado[1] = { ...conVerificado[1], servicios: conVerificado[1].servicios.map((s, i) => ({ ...s, dias_entrega: i ? 10 : 2, creado_en: `2026-10-0${i + 2}T00:00:00Z` })) };
+    const titulos = (f: Partial<Parameters<typeof buscarServicios>[1]>) =>
+      buscarServicios(conVerificado, { texto: '', barrio: 'todos', precioMaximo: null, ...f }).map((r) => r.servicio.titulo);
+    expect(titulos({ plazoMaximo: 2 })).toEqual(['Clase de inglés']);
+    expect(titulos({ soloVerificados: true })).toEqual(['Ilustración', 'Diseño de logo']);
+    expect(titulos({ orden: 'precio-menor' })).toEqual(['Clase de inglés', 'Logotipo express', 'Ilustración', 'Curso de Rust', 'Diseño de logo']);
+    expect(titulos({ orden: 'precio-mayor' })[0]).toBe('Diseño de logo');
+    expect(titulos({ orden: 'nuevos' }).slice(0, 2)).toEqual(['Logotipo express', 'Clase de inglés']);
   });
 });
 
@@ -183,6 +206,23 @@ describe('Se busca: filtro de carteles', () => {
   it('para quien busca trabajo: presupuesto mínimo', () => {
     expect(ids({ presupuestoMinimo: 40 })).toEqual(['1', '3']);
     expect(ids({ presupuestoMinimo: 100 })).toEqual([]);
+  });
+
+  it('el tablón: plazo, solo verificados y orden', () => {
+    const ahora = Date.now();
+    const lista = [
+      { ...carteles[0], fecha_limite: new Date(ahora + 2 * 86_400_000).toISOString(), creado_en: '2026-10-01T00:00:00Z', autor: { verificado: true } },
+      { ...carteles[1], fecha_limite: new Date(ahora + 20 * 86_400_000).toISOString(), creado_en: '2026-10-03T00:00:00Z', autor_id: 'b', autor: { verificado: false } },
+      { ...carteles[2], fecha_limite: new Date(ahora + 9 * 86_400_000).toISOString(), creado_en: '2026-10-02T00:00:00Z', autor_id: 'c', autor: { verificado: true } },
+    ];
+    const f = (x: Partial<Parameters<typeof filtrarSeBusca>[1]>, rep?: Map<string, number | null>) =>
+      filtrarSeBusca(lista, { texto: '', barrio: 'todos', categoria: 'todas', presupuestoMinimo: null, ...x }, rep, ahora).map((b) => b.id);
+    expect(f({ plazoDias: 7 })).toEqual(['1']);
+    expect(f({ soloVerificados: true })).toEqual(['1', '3']);
+    expect(f({ orden: 'nuevos' })).toEqual(['2', '3', '1']);
+    expect(f({ orden: 'presupuesto' })).toEqual(['3', '1', '2']);
+    expect(f({ orden: 'vence' })).toEqual(['1', '3', '2']);
+    expect(f({ orden: 'reputacion' }, new Map([['a', 3], ['b', 5], ['c', 4]]))).toEqual(['2', '3', '1']);
   });
 });
 
@@ -307,6 +347,30 @@ describe('dibujo en vectores', () => {
     expect(lineas).toHaveLength(2);
     expect(lineas.every((l) => l.length <= 17)).toBe(true);
     expect(lineas[1].endsWith('…')).toBe(true);
+  });
+
+  it('Plaza: el edificio sale siempre igual para la misma persona y crece en pisos con los locales', () => {
+    expect(pisosEdificio(1)).toBe(2);
+    expect(pisosEdificio(3)).toBe(4);
+    expect(pisosEdificio(10)).toBe(5);
+    const a = crearEdificioPersona({ semilla: 'persona-1', pisos: 3 });
+    expect(a).toBe(crearEdificioPersona({ semilla: 'persona-1', pisos: 3 }));
+    expect(a).toContain('viewBox="0 0 150 172"');
+    expect(crearEdificioPersona({ semilla: 'persona-1', pisos: 5 })).not.toBe(a);
+    // El letrero va más arriba cuantos más pisos tiene (y nunca se sale del dibujo).
+    expect(letreroEdificio(5).y).toBeLessThan(letreroEdificio(2).y);
+    expect(letreroEdificio(5).y).toBeGreaterThan(0);
+    expect(crearInteriorEdificio()).toContain('viewBox="0 0 480 300"');
+  });
+
+  it('el tablón de afiches y el arte de la Plaza', () => {
+    for (const l of ['plaza', ...LISTA_BARRIOS] as const) {
+      const svg = crearTablon(l);
+      expect(svg).toContain(`viewBox="0 0 ${TABLON.ancho} ${TABLON.alto}"`);
+      expect(svg).toContain('TABLÓN DE AFICHES');
+    }
+    expect(edificioCentral('plaza').nombre).toBe('Casa de la Plaza');
+    expect(estatua('plaza').textos[0].texto).toBe('PLAZA');
   });
 
   it('el libro y el lápiz de «Mis pedidos» son SVG sueltos (para animar solo el lápiz)', () => {

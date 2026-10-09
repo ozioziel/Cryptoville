@@ -4,11 +4,14 @@
 // - Los videos pueden ser de Mux (públicos) o de YouTube y Vimeo; solo se aceptan los dominios
 //   de `portafolio.dominiosVideo` en reglas.ts.
 // - Los enlaces son solo https: la web muestra el dominio y los abre con rel="nofollow ugc noopener".
+import type { TipoExperiencia } from './cv.js';
 import type { Reglas } from './reglas.js';
 
 export interface Experiencia {
   id: string;
   usuario_id: string;
+  /** Sección del CV: experiencia, educación, certificación, premio o voluntariado (ver cv.ts). */
+  tipo: TipoExperiencia;
   puesto: string;
   lugar: string;
   /** Fecha (AAAA-MM-DD). */
@@ -16,6 +19,10 @@ export interface Experiencia {
   /** Fecha (AAAA-MM-DD) o null si sigue ahí. */
   hasta: string | null;
   descripcion: string | null;
+  /** Enlace https (por ejemplo, la credencial de una certificación). */
+  enlace: string | null;
+  /** Se ve en el CV público. */
+  publico: boolean;
   orden: number;
 }
 
@@ -40,6 +47,8 @@ export interface Proyecto {
   videos: VideoProyecto[];
   /** Se cuelga como cuadro en la pared del interior de sus locales. */
   destacado: boolean;
+  /** Se ve en el CV y en el portafolio públicos (si no, solo lo ve su dueña). */
+  publico: boolean;
   orden: number;
   creado_en: string;
 }

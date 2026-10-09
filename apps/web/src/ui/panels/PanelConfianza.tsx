@@ -27,6 +27,8 @@ const QUE: Record<TipoReporte, string> = {
   persona: 'a esta persona',
   proyecto: 'este proyecto',
   chat: 'este mensaje',
+  trabajo_publico: 'este trabajo verificado',
+  cv: 'este CV',
 };
 
 /** Reportar contenido o a una persona. El equipo lo revisa. */

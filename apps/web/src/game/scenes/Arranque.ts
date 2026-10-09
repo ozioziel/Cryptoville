@@ -1,4 +1,4 @@
-import type { Barrio } from '@cryptoville/shared';
+import type { Lugar } from '@cryptoville/shared';
 import Phaser from 'phaser';
 import { FUENTE } from '../texturas';
 
@@ -32,7 +32,7 @@ export class Arranque extends Phaser.Scene {
     const limite = new Promise((listo) => setTimeout(listo, 3000));
     void Promise.race([fuentes, limite]).finally(() => {
       subir.remove();
-      const villa = (this.registry.get('villa-inicial') as Barrio | undefined) ?? 'audiovisual';
+      const villa = (this.registry.get('villa-inicial') as Lugar | undefined) ?? 'audiovisual';
       this.scene.start(`villa-${villa}`);
     });
   }

@@ -1,4 +1,4 @@
-import type { AparienciaCasa, AparienciaPersona, Barrio } from '@cryptoville/shared';
+import type { AparienciaCasa, AparienciaPersona, Barrio, Lugar } from '@cryptoville/shared';
 import Phaser from 'phaser';
 
 /**
@@ -28,6 +28,21 @@ export interface LocalEnMapa {
  */
 export type ModoVilla = 'contratar' | 'trabajar';
 
+/**
+ * El edificio de una persona en la Plaza principal (su CV): uno por persona con al menos un local activo.
+ * `lote` es `usuarios.lote_plaza` (contando todos los sectores de la Plaza).
+ */
+export interface EdificioEnMapa {
+  usuarioId: string;
+  lote: number;
+  nombre: string;
+  verificado: boolean;
+  avatar: number;
+  apariencia?: AparienciaPersona | null;
+  /** Locales activos de la persona (el edificio tiene más pisos con más locales). */
+  locales: number;
+}
+
 /** Un «Se busca» abierto, para dibujarlo como casa en el modo «Quiero trabajar». */
 export interface SeBuscaEnMapa {
   id: string;
@@ -41,30 +56,36 @@ export interface SeBuscaEnMapa {
 }
 
 /**
- * Una puerta del mapa: un local, un «Se busca», un lote disponible, el edificio central de la villa
- * o el letrero que lleva a otro sector («Creativo B →»).
+ * Una puerta del mapa: un local, un «Se busca», un lote disponible, el edificio central de la villa,
+ * el edificio de una persona en la Plaza (`persona`), el tablón de afiches (la búsqueda) o el letrero
+ * que lleva a otro sector («Creativo B →»).
  */
 export interface Puerta {
-  tipo: 'local' | 'se-busca' | 'lote-libre' | 'edificio' | 'sector';
-  barrio: Barrio;
+  tipo: 'local' | 'se-busca' | 'lote-libre' | 'edificio' | 'sector' | 'persona' | 'tablon';
+  /** Villa (o la Plaza) donde está la puerta. */
+  barrio: Lugar;
   /** Lote dentro de la villa, contando todos sus sectores (null en el edificio central y en los letreros). */
   lote: number | null;
   /** «Se busca» de la casa (solo en el modo «Quiero trabajar»). */
   busquedaId?: string;
   /** Sector al que lleva el letrero (1 = el primero, 2 = «B»…). */
   sector?: number;
+  /** Persona del edificio (solo en la Plaza). */
+  usuarioId?: string;
 }
 
-/** Sector de la villa que se está mostrando (cada sector tiene 60 casas; cada modo cuenta aparte). */
+/** Sector de la villa (o de la Plaza) que se está mostrando (cada sector tiene 60 casas; cada modo cuenta aparte). */
 export interface SectorActual {
-  barrio: Barrio;
+  barrio: Lugar;
   sector: number;
   /** Sectores que hay en esta villa y en este modo. */
   total: number;
 }
 
-/** Lo que React le pasa a Phaser para dibujar el interior de un local. */
+/** Lo que React le pasa a Phaser para dibujar el interior de un local (o del edificio de una persona en la Plaza). */
 export interface DatosInterior {
+  /** Interior de un local (como antes) o del edificio de una persona (su CV). */
+  tipo?: 'local' | 'edificio';
   nombre: string;
   avatarDueno: number;
   aparienciaDueno?: AparienciaPersona | null;
@@ -93,8 +114,8 @@ export interface CuadroInterior {
 export interface EventosJuego {
   /** Phaser → React: la escena de una villa está lista (React vuelve a mandar locales y personaje). */
   'pueblo-listo': [];
-  /** Phaser → React: villa que se está mostrando (al llegar a una villa). */
-  'villa-actual': [barrio: Barrio];
+  /** Phaser → React: villa (o la Plaza) que se está mostrando (al llegar). */
+  'villa-actual': [lugar: Lugar];
   /** Phaser → React: sector de la villa que se está mostrando y cuántos hay. */
   'sector-actual': [datos: SectorActual];
   /** Phaser → React: el jugador está frente a una puerta (o se alejó: null). */
@@ -112,6 +133,8 @@ export interface EventosJuego {
   'salio-del-local': [];
   /** React → Phaser: locales abiertos (de todas las villas) para pintar casas, letreros y dueños. */
   locales: [locales: LocalEnMapa[]];
+  /** React → Phaser: edificios de la Plaza principal (uno por persona con locales). */
+  edificios: [edificios: EdificioEnMapa[]];
   /** React → Phaser: «Se busca» abiertos (de todas las villas), las casas del modo «Quiero trabajar». */
   'se-busca': [busquedas: SeBuscaEnMapa[]];
   /** React → Phaser: cambiar el modo de la villa (cambian las casas, no el diseño). */
@@ -127,12 +150,12 @@ export interface EventosJuego {
   'pedir-entrar': [];
   /** @deprecated Lleva al jugador al lote de la villa actual; usar 'ir-a-local' (villa y lote). */
   'ir-a-lote': [lote: number];
-  /** React → Phaser: viajar a una villa (selector de villas). */
-  'ir-a-villa': [barrio: Barrio];
+  /** React → Phaser: viajar a una villa o a la Plaza (selector de villas). */
+  'ir-a-villa': [lugar: Lugar];
   /** React → Phaser: pasar a otro sector de la villa actual (selector de villas). */
   'ir-a-sector': [sector: number];
-  /** React → Phaser: llevar al jugador frente a una casa, en su villa (buscador y "Mi local"). */
-  'ir-a-local': [destino: { barrio: Barrio; lote: number }];
+  /** React → Phaser: llevar al jugador frente a una casa, en su villa (o a un edificio de la Plaza). */
+  'ir-a-local': [destino: { barrio: Lugar; lote: number }];
   /** React → Phaser: mostrar el interior del local (cuando el lote tiene dueño). */
   'abrir-interior': [datos: DatosInterior];
   /** React → Phaser: cerrar el interior y volver a la villa. */

@@ -255,6 +255,21 @@ cryptoville/
 | **Celular** | La bienvenida muestra primero cómo entrar y después la explicación (con el joystick). El selector de wallets solo lista las que funcionan en el teléfono (las web y WalletConnect). Con sesión, la barra usa botones más chicos y el botón del rol pasa abajo a la derecha. `lib/dispositivo.ts` decide qué es celular |
 | **Al cerrar sesión** | Se cierran los paneles y el chat y el personaje vuelve al de invitado (`AVATAR_INVITADO`) |
 
+### «Mis trabajos», la Plaza principal y el tablón de afiches (mejoras de la plaza)
+
+| Tema | Cómo funciona |
+|---|---|
+| **«Mis trabajos»** | Perfil → «Mis trabajos»: los pedidos terminados (liberados, finalizados o con disputa resuelta), en pestañas «Como proveedor» y «Como cliente», con el monto (solo lo ve la persona: los pedidos son privados por RLS). La web los lee de Supabase |
+| **Trabajos verificados** | Tabla `trabajos_publicos` (lectura pública por RLS, sin lo oculto ni las cuentas suspendidas). `POST` y `DELETE /api/trabajos-publicos/:pedidoId`: solo las partes, solo pedidos liberados o finalizados (una disputa resuelta no cuenta como «pagado») y hasta 6 por persona (`trabajos.maxPublicos`). Guarda solo el título del servicio, la fecha y la transacción que lo cerró (verificada en la red); nunca el monto ni el detalle. Las estrellas salen de `resenas`. Se reporta como `trabajo_publico` |
+| **«Pasar a mi portafolio»** | Desde «Mis trabajos» (como proveedor) abre un proyecto nuevo con el título del servicio; la persona completa el resto, porque el detalle del pedido es privado |
+| **La Plaza principal** | Un lugar más del mapa (`Lugar = Barrio \| 'plaza'` en `packages/shared/src/plaza.ts`), primero en el selector y solo en «Quiero contratar» (en «Quiero trabajar» se va a la primera villa). Usa la misma escena `Villa` con su arte (calle de losas, Casa de la Plaza, estatua del apretón de manos). No es un barrio: en la base no hay locales de la Plaza |
+| **El edificio de cada persona** | `usuarios.lote_plaza` (único entre los que tienen): lo asigna `PlazaService` al abrir el primer local (primer lote libre) y lo libera al archivar el último; al arrancar, la API asigna a quien tenga locales sin edificio (la migración hizo el backfill). Lo dibuja `crearEdificioPersona` (`arte/edificio.ts`): de 2 a 5 pisos según sus locales, el nombre en la cornisa con la ✔ y la persona en la vereda. Sectores de 60, como las villas («Plaza B») |
+| **El CV** | Secciones en `experiencias` (`tipo`: trabajo, educación, certificación, premio, voluntariado; `enlace` y `publico`), proyectos con `publico`, y la tabla `cvs` (acerca de mí, habilidades, idiomas y el PDF, cada uno con su «público»). `cvs` es privada (la dueña y el árbitro); los demás leen la vista `cvs_publicos`, que deja vacío lo que no es público (RLS no esconde columnas). `PUT /api/cv`, y el PDF con `POST /api/cv/pdf` (URL firmada), `PUT /api/cv/pdf` (comprueba el archivo) y `DELETE /api/cv/pdf`. Bucket público `cvs` (solo PDF, 5 MB). Se reporta como `cv` (lo oculta). Se edita en «Mi CV y portafolio» |
+| **Dentro del edificio** | El interior (`crearInteriorEdificio`) con los cuadros de sus proyectos destacados (siguen también en sus locales) y el panel del CV (`PanelEdificio` en `ui/panels/PanelPlaza.tsx`): acerca de mí, trabajos verificados, las secciones, habilidades, idiomas, proyectos, reputación, el PDF y **sus locales** con sus servicios y «Ir al local». Desde el edificio no se pide |
+| **Ir al local o a su edificio** | `irAlLocal(local, 'edificio')` e `irAlEdificio(usuarioId)` en `ui/estado.tsx`. Desde el chat, «Visitar su edificio»; desde un servicio, el buscador, una propuesta o adentro de un local, los dos botones (`ui/components/BotonesIr.tsx`) |
+| **Recomendación** | A quien tiene un local y todavía no armó su CV, una sola vez por navegador: «Arma tu CV en la Plaza» (`ui/components/RecomendacionCv.tsx`) |
+| **El tablón de afiches** | En cada villa y en la Plaza, a la derecha del edificio central (en el lugar del último farol), en los dos modos: se usa como una puerta (`tipo: 'tablon'`) y abre lo mismo que la lupa. El buscador (`PanelBuscar`) va a pantalla completa con aspecto de corcho: cada resultado es un afiche (foto o color de la villa, título, precio o presupuesto, villa, estrellas y ✔) con «Ir al local» o «Ver el Se busca» e «Ir a su edificio». Filtros plegables: villa, categoría, precio o presupuesto, plazo, solo verificados y orden (`features/services/buscar.ts`, `features/busquedas/filtrar.ts`) |
+
 ### Módulos nuevos de la API
 
 | Carpeta | Qué hace |
@@ -270,7 +285,10 @@ cryptoville/
 | `videos/` | Mux: subida directa, webhook y tokens de reproducción |
 | `legal/` | Documentos, aceptaciones y comentarios |
 | `locales/` | Varios locales y el pago del local extra |
-| `portafolio/` | Experiencia y proyectos |
+| `portafolio/` | Experiencia (las secciones del CV) y proyectos |
+| `trabajos/` | Trabajos verificados (lo que se muestra en el perfil público) |
+| `plaza/` | El edificio de cada persona en la Plaza principal (`usuarios.lote_plaza`) |
+| `cv/` | El CV: acerca de mí, habilidades, idiomas y el PDF |
 | `cercania/` | Chat por cercanía y su limpieza a los 7 días |
 | `rampas/` | Pagar con el QR del banco y pasar a mi banco (rampa simulada en testnet) |
 | `config/` | Configuración por red, servicios encendidos y revisión de mainnet |
@@ -297,9 +315,9 @@ Plantillas: `.env.example`, `.env.local.example` y `.env.mainnet.example`. Qué 
 | Parte | Cantidad | Qué cubren |
 |---|---|---|
 | Contratos (Rust) | v1: 27 + 1 manual · v2: 27 + 1 manual · USDC de prueba: 5 | En el v2: garantía y etapas, cambios, vencimientos, disputas con sus tres resultados, pago directo, pausa, roles, actualización con 7 días de aviso (también con el `.wasm` real) y la propiedad «todo lo que entra sale a alguien» |
-| Shared (Vitest) | 46 | Además de lo de v1: reglas por red, plan de fases y montos, estados derivados de las fases, huella de la entrega, legales, sectores, videos del portafolio y la cotización de la rampa simulada |
-| API (Jest + Supabase local) | 87 en 10 suites | Además de lo de v1: lectura de transacciones sin red, wallets, legales, KYC y moderación, métodos de pago y plan por etapas, varios locales y el pago del local extra, propuestas con local, plan y proyectos, portafolio, chat por cercanía (RLS, límite, bloqueos, borrado a los 7 días), el canal privado de Realtime, la rampa simulada (recarga, pago simulado una sola vez, QR vencido, retiro, RLS), los errores de la base como 400 y la configuración (mismo contrato en v1 y v2, rampa solo en testnet) y eliminar un local (archivarlo: permisos, pedido en curso, propuestas retiradas, cupo y lote libre). Las pruebas apagan los servicios externos del `.env` de quien las corre (`test/sin-servicios.ts`) |
-| Web (Vitest) | 41 | Además de lo de v1: lógica de pagos y fases en la interfaz, el cartel de aviso de los «Se busca» y el libro de «Mis pedidos» |
+| Shared (Vitest) | 49 | Además de lo de v1: reglas por red, plan de fases y montos, estados derivados de las fases, huella de la entrega, legales, sectores, videos del portafolio la cotización de la rampa simulada, los trabajos publicables, los lugares (la Plaza) y el CV |
+| API (Jest + Supabase local) | 93 en 12 suites | Además de lo de v1: lectura de transacciones sin red, wallets, legales, KYC y moderación, métodos de pago y plan por etapas, varios locales y el pago del local extra, propuestas con local, plan y proyectos, portafolio, chat por cercanía (RLS, límite, bloqueos, borrado a los 7 días), el canal privado de Realtime, la rampa simulada (recarga, pago simulado una sola vez, QR vencido, retiro, RLS), los errores de la base como 400 y la configuración (mismo contrato en v1 y v2, rampa solo en testnet) eliminar un local (archivarlo: permisos, pedido en curso, propuestas retiradas, cupo y lote libre), los trabajos verificados (solo las partes, solo terminados y pagados, sin monto, tope de 6, RLS y moderación) y la Plaza (asignar, conservar y liberar el lote del edificio, el arranque como backfill, lo público y lo privado del CV, el PDF con tipo y tamaño, ocultar y suspender). Las pruebas apagan los servicios externos del `.env` de quien las corre (`test/sin-servicios.ts`) |
+| Web (Vitest) | 46 | Además de lo de v1: lógica de pagos y fases en la interfaz, el cartel de aviso de los «Se busca», el libro de «Mis pedidos», los edificios de la Plaza, el tablón y sus filtros (plazo, verificados y orden) |
 
 ### Pendiente a propósito
 

@@ -17,7 +17,7 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { reglasDe, videoExterno, type EnlaceProyecto, type VideoProyecto } from '@cryptoville/shared';
+import { SECCIONES_CV, TIPOS_EXPERIENCIA, reglasDe, videoExterno, type EnlaceProyecto, type TipoExperiencia, type VideoProyecto } from '@cryptoville/shared';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
@@ -47,8 +47,13 @@ import { PrismaService } from '../prisma/prisma.service';
 const FECHA = { strict: true };
 
 class ExperienciaDto {
+  /** Sección del CV (si falta, experiencia de trabajo, como antes). */
+  @IsOptional()
+  @IsIn(TIPOS_EXPERIENCIA, { message: 'Sección del CV inválida' })
+  tipo?: TipoExperiencia;
+
   @IsString()
-  @Length(2, 80, { message: 'El puesto debe tener entre 2 y 80 caracteres' })
+  @Length(2, 80, { message: 'El nombre o puesto debe tener entre 2 y 80 caracteres' })
   puesto: string;
 
   @IsString()
@@ -67,6 +72,17 @@ class ExperienciaDto {
   @IsString()
   @Length(0, 600, { message: 'La descripción puede tener hasta 600 caracteres' })
   descripcion?: string;
+
+  /** Enlace https (la credencial de una certificación). Vacío o null: sin enlace. */
+  @ValidateIf((_, v) => v !== undefined && v !== null && v !== '')
+  @IsString()
+  @Matches(/^https:\/\/[^\s]{4,490}$/, { message: 'El enlace tiene que empezar con https://' })
+  enlace?: string | null;
+
+  /** Se ve en el CV público (sí, si falta). */
+  @IsOptional()
+  @IsBoolean()
+  publico?: boolean;
 
   @IsOptional()
   @IsInt()
@@ -139,6 +155,11 @@ class ProyectoDto {
   @IsBoolean()
   destacado?: boolean;
 
+  /** Se ve en el CV y en el portafolio públicos (sí, si falta). */
+  @IsOptional()
+  @IsBoolean()
+  publico?: boolean;
+
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -174,22 +195,30 @@ export class PortafolioService implements OnModuleInit {
   }
 
   async guardarExperiencia(yo: Usuario, id: string | null, dto: ExperienciaDto) {
-    if (dto.hasta && dto.hasta < dto.desde) throw new BadRequestException('La fecha de fin no puede ser antes que la de inicio');
+    const tipo = dto.tipo ?? 'trabajo';
+    const seccion = SECCIONES_CV[tipo];
+    // Los premios tienen una sola fecha.
+    const hasta = seccion.conFin && dto.hasta ? dto.hasta : null;
+    if (hasta && hasta < dto.desde) throw new BadRequestException('La fecha de fin no puede ser antes que la de inicio');
     const datos = {
+      tipo,
       puesto: dto.puesto.trim(),
       lugar: dto.lugar.trim(),
       desde: new Date(dto.desde),
-      hasta: dto.hasta ? new Date(dto.hasta) : null,
+      hasta: hasta ? new Date(hasta) : null,
       descripcion: dto.descripcion?.trim() || null,
+      enlace: dto.enlace?.trim() || null,
+      publico: dto.publico ?? true,
       orden: dto.orden ?? 0,
     };
     if (id) {
       await this.propia('experiencia', yo, id);
       return this.prisma.experiencia.update({ where: { id }, data: datos });
     }
-    const max = this.reglas.portafolio.maxExperiencias;
-    if ((await this.prisma.experiencia.count({ where: { usuario_id: yo.id } })) >= max) {
-      throw new ConflictException(`Puedes guardar hasta ${max} experiencias`);
+    // Cada sección del CV cuenta aparte.
+    const max = this.reglas.cv.maxPorSeccion;
+    if ((await this.prisma.experiencia.count({ where: { usuario_id: yo.id, tipo } })) >= max) {
+      throw new ConflictException(`En «${seccion.titulo}» puedes guardar hasta ${max}`);
     }
     return this.prisma.experiencia.create({ data: { ...datos, usuario_id: yo.id } });
   }
@@ -210,6 +239,7 @@ export class PortafolioService implements OnModuleInit {
       enlaces: enlaces as unknown as Prisma.InputJsonValue,
       videos: videos as unknown as Prisma.InputJsonValue,
       destacado: dto.destacado ?? false,
+      publico: dto.publico ?? true,
       orden: dto.orden ?? 0,
     };
     if (datos.destacado) {
