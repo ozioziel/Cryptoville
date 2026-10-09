@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, RequestMethod } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
@@ -36,6 +36,8 @@ const config = leerConfiguracion();
 @Module({
   imports: [
     LoggerModule.forRoot({
+      // Sintaxis de rutas de Nest 11: el '*' por defecto de nestjs-pino genera un aviso al arrancar.
+      forRoutes: [{ path: '{*ruta}', method: RequestMethod.ALL }],
       pinoHttp: {
         level: config.logNivel,
         // Logs en JSON en producción; legibles en desarrollo.
