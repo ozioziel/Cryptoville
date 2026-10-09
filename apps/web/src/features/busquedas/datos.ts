@@ -41,7 +41,15 @@ const uno = <T,>(v: T | T[] | null | undefined): T | null => (Array.isArray(v) ?
 
 /** Lo que Phaser necesita para dibujar un «Se busca» como casa en el modo «Quiero trabajar». */
 export function seBuscaEnMapa(b: BusquedaPublica): SeBuscaEnMapa {
-  return { id: b.id, barrio: b.barrio, lote: b.lote, titulo: b.titulo, avatarAutor: b.autor.avatar, aparienciaAutor: b.autor.apariencia };
+  return {
+    id: b.id,
+    barrio: b.barrio,
+    lote: b.lote,
+    titulo: b.titulo,
+    presupuesto: `hasta ${b.presupuesto_usdc} USDC`,
+    avatarAutor: b.autor.avatar,
+    aparienciaAutor: b.autor.apariencia,
+  };
 }
 
 /** «Se busca» abiertos y sin vencer, los más nuevos primero (lectura pública). */

@@ -4,7 +4,7 @@ Lo que hoy funciona **de mentira** (para poder probar el flujo completo en testn
 
 | # | Parte | Estado | Dónde está |
 |---|---|---|---|
-| 1 | Pagar con el QR del banco | 🟡 **Simulada** en testnet | `apps/api/src/rampas/`, `apps/web/src/ui/pagos/PagarConQr.tsx`, `packages/shared/src/rampas.ts` |
+| 1 | Pagar con el QR del banco (en un pedido o desde el saldo de arriba: «Recargar con el QR de tu banco») | 🟡 **Simulada** en testnet | `apps/api/src/rampas/`, `apps/web/src/ui/pagos/PagarConQr.tsx`, `apps/web/src/ui/pagos/Saldo.tsx`, `packages/shared/src/rampas.ts` |
 | 2 | Pasar a mi banco (retiro) | 🟡 **Simulada** en testnet; con Pollar **no está hecha** | `apps/api/src/rampas/`, `apps/web/src/ui/panels/PanelRetiro.tsx` |
 | 3 | Rampa real con Pollar (QR del banco) | 🟠 **Programada, sin probar** | `apps/web/src/features/rampas/pollar.ts` |
 | 4 | Entrar con Google | 🔴 **Apagado** (`POLLAR_GOOGLE` vacío): programado con Pollar, pero en la prueba no funcionó | `apps/web/src/features/auth/pollar.ts`, `sesion.tsx`, `PanelBienvenida.tsx` |
@@ -22,7 +22,7 @@ Lo que hoy funciona **de mentira** (para poder probar el flujo completo en testn
 
 ## 1. Pagar con el QR del banco (rampa simulada)
 
-**Para qué:** quien no tiene USDC paga escaneando un QR con la app de su banco (QR Simple en Bolivia). Una rampa (proveedor de cambio con licencia) recibe los bolivianos y manda USDC a su wallet. Después la persona confirma el pago de siempre (garantía, etapas o directo).
+**Para qué:** quien no tiene USDC paga escaneando un QR con la app de su banco (QR Simple en Bolivia). Una rampa (proveedor de cambio con licencia) recibe los bolivianos y manda USDC a su wallet. Después la persona confirma el pago de siempre (garantía, etapas o directo). También se puede recargar sin un pedido: en el saldo de arriba → «Recargar con el QR de tu banco» (`PanelRecargar`), con la misma rampa simulada.
 
 **Qué es de mentira** (solo con `RAMPA_SIMULADA=si`, que la API rechaza en mainnet):
 - **El QR:** es un texto que empieza con `SIMULADO-CRYPTOVILLE|QR-SIMPLE|…`. Ningún banco lo puede cobrar.

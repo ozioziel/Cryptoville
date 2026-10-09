@@ -2,12 +2,12 @@ import { BARRIOS, enlaceContrato, esHashValido, loteEnSector, nombreSector, sect
 import { useEffect, useState } from 'react';
 import { useSesion } from '../../features/auth/sesion';
 import { FirmarEnApp } from '../../features/escrow/FirmarEnApp';
-import { emitir } from '../../game/EventBus';
 import { api, mensajeDeError } from '../../lib/api';
 import { obtenerConfig, reglas } from '../../lib/config';
 import { useEstado } from '../estado';
 import { Aviso, Cargando, Copiar } from '../components/basicos';
 import { Icono } from '../components/Iconos';
+import { ServiciosDelLocal } from './PanelMiLocal';
 
 /** Lo que devuelve GET /api/mis-locales (ver CupoLocales en la API). */
 interface Cupo {
@@ -29,12 +29,54 @@ export function ubicacionLocal(l: Pick<Local, 'barrio' | 'lote'>): string {
   return `Villa ${nombreSector(BARRIOS[l.barrio].nombre, sectorDeLote(l.lote, porSector))} · casa ${loteEnSector(l.lote, porSector)}`;
 }
 
+/**
+ * «Eliminar local» (lo archiva la API): pide confirmación, explica qué pasa y avisa si hay pedidos en curso.
+ * Se usa en «Mis locales» y en «Editar» dentro del local.
+ */
+export function BotonEliminarLocal({ local, onEliminado }: { local: Pick<Local, 'id' | 'nombre'>; onEliminado?: () => void }) {
+  const { recargar, locales: mios } = useSesion();
+  const { recargarPueblo, avisar } = useEstado();
+  const [ocupado, setOcupado] = useState(false);
+
+  const eliminar = async () => {
+    const ultimo = mios.length === 1;
+    const confirmado = window.confirm(
+      `¿Eliminar «${local.nombre}»?\n\nDeja de verse en la villa y libera su lote. Sus servicios se desactivan y los pedidos terminados siguen en tu historial.` +
+        (ultimo ? '\n\nEs tu único local: después tendrás que abrir otro para ofrecer servicios.' : ''),
+    );
+    if (!confirmado) return;
+    setOcupado(true);
+    try {
+      const r = await api<{ propuestas_retiradas: number }>(`/locales/${local.id}`, { metodo: 'DELETE' });
+      await Promise.all([recargar(), recargarPueblo()]);
+      avisar(
+        r.propuestas_retiradas
+          ? `Eliminaste «${local.nombre}». También se retiraron ${r.propuestas_retiradas === 1 ? 'su propuesta enviada' : `sus ${r.propuestas_retiradas} propuestas enviadas`}.`
+          : `Eliminaste «${local.nombre}»`,
+        'exito',
+      );
+      onEliminado?.();
+    } catch (e) {
+      avisar(mensajeDeError(e), 'error');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  return (
+    <button type="button" className="boton boton-mini boton-peligro" disabled={ocupado} onClick={eliminar}>
+      {ocupado ? 'Eliminando…' : 'Eliminar'}
+    </button>
+  );
+}
+
 /** Mis locales: la lista, cuántos quedan gratis y el pago único del local extra. */
 export function PanelMisLocales() {
   const { usuario, locales: mios, recargar } = useSesion();
-  const { locales, abrir, cerrar } = useEstado();
+  const { locales, abrir, cerrar, irAlLocal } = useEstado();
   const [cupo, setCupo] = useState<Cupo | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [abierto, setAbierto] = useState<string | null>(null);
 
   const cargar = async () => {
     try {
@@ -80,13 +122,27 @@ export function PanelMisLocales() {
                   type="button"
                   className="boton boton-mini"
                   onClick={() => {
-                    emitir('ir-a-local', { barrio: l.barrio, lote: l.lote });
+                    irAlLocal(l);
                     cerrar();
                   }}
                 >
                   Ir
                 </button>
+                <button
+                  type="button"
+                  className="boton boton-mini"
+                  aria-expanded={abierto === l.id}
+                  onClick={() => setAbierto(abierto === l.id ? null : l.id)}
+                >
+                  Servicios
+                </button>
+                <BotonEliminarLocal local={l} onEliminado={() => void cargar()} />
               </span>
+              {abierto === l.id && (
+                <div className="servicios-del-local">
+                  <ServiciosDelLocal localId={l.id} />
+                </div>
+              )}
             </li>
           );
         })}

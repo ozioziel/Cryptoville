@@ -226,9 +226,12 @@ export const APARIENCIA_POR_AVATAR: Record<number, AparienciaPersona> = {
   112: persona({ peinado: 'corto', colorPelo: 'castano', barba: 'completa', arriba: 'polera', colorArriba: 'verde', colorAbajo: 'cafe', gorro: 'vincha', colorGorro: 'verde' }),
 };
 
-/** Persona equivalente a un personaje de Kenney (o la de 85 si el número no existe). */
+/** Personaje de quien mira la villa sin sesión (invitado). */
+export const AVATAR_INVITADO = 85;
+
+/** Persona equivalente a un personaje de Kenney (o la del invitado si el número no existe). */
 export function aparienciaDeAvatar(avatar: number): AparienciaPersona {
-  return { ...(APARIENCIA_POR_AVATAR[avatar] ?? APARIENCIA_POR_AVATAR[85]) };
+  return { ...(APARIENCIA_POR_AVATAR[avatar] ?? APARIENCIA_POR_AVATAR[AVATAR_INVITADO]) };
 }
 
 export type ResultadoValidacion<T> = { ok: true; valor: T } | { ok: false; error: string };

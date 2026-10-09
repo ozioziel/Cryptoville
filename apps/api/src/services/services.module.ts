@@ -125,7 +125,8 @@ export class ServicesController {
 
   private async servicioPropio(yo: Usuario, id: string) {
     const servicio = await this.prisma.servicio.findUnique({ where: { id }, include: { local: true } });
-    if (!servicio) throw new NotFoundException('No existe ese servicio');
+    // Los servicios de un local eliminado (archivado) ya no se editan.
+    if (!servicio || servicio.local.archivado_en) throw new NotFoundException('No existe ese servicio');
     if (servicio.local.usuario_id !== yo.id) throw new ForbiddenException('Ese servicio no es tuyo');
     return servicio;
   }

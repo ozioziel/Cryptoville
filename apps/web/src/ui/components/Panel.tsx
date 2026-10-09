@@ -4,6 +4,8 @@ import { Icono } from './Iconos';
 /**
  * Panel lateral (escritorio) u hoja inferior (celular).
  * Con `portada`, arriba va una franja de color (el degradado de la villa) en lugar del título.
+ * Con `onAlternarCompleto`, la cabecera lleva un botón para agrandarlo a pantalla completa (y volver);
+ * `lateral` se muestra al costado solo cuando está a pantalla completa.
  */
 export function Panel({
   titulo,
@@ -11,6 +13,9 @@ export function Panel({
   onAtras,
   portada,
   amplio = false,
+  completo = false,
+  onAlternarCompleto,
+  lateral,
   children,
 }: {
   titulo: ReactNode;
@@ -18,6 +23,9 @@ export function Panel({
   onAtras?: () => void;
   portada?: string;
   amplio?: boolean;
+  completo?: boolean;
+  onAlternarCompleto?: () => void;
+  lateral?: ReactNode;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -36,14 +44,36 @@ export function Panel({
     </button>
   );
   const cerrar = (
-    <button type="button" className="boton-icono" onClick={onCerrar} aria-label="Cerrar">
-      <Icono nombre="cerrar" />
-    </button>
+    <span className="panel-botones">
+      {onAlternarCompleto && (
+        <button
+          type="button"
+          className="boton-icono"
+          onClick={onAlternarCompleto}
+          aria-pressed={completo}
+          aria-label={completo ? 'Volver al tamaño normal' : 'Agrandar a pantalla completa'}
+          title={completo ? 'Volver al tamaño normal' : 'Agrandar a pantalla completa'}
+        >
+          <Icono nombre={completo ? 'reducir' : 'agrandar'} />
+        </button>
+      )}
+      <button type="button" className="boton-icono" onClick={onCerrar} aria-label="Cerrar">
+        <Icono nombre="cerrar" />
+      </button>
+    </span>
+  );
+
+  const cuerpo = (
+    <div className="panel-cuerpo">
+      {/* La portada va dentro del contenido para que el avatar pueda montarse sobre ella. */}
+      {portada && <div className="panel-portada" style={{ background: portada }} />}
+      {children}
+    </div>
   );
 
   return (
     <aside
-      className={`panel ${amplio ? 'panel-amplio' : ''} ${portada ? 'con-portada' : ''}`}
+      className={`panel ${amplio ? 'panel-amplio' : ''} ${completo ? 'panel-completo' : ''} ${portada ? 'con-portada' : ''}`}
       ref={ref}
       tabIndex={-1}
       role="dialog"
@@ -61,11 +91,14 @@ export function Panel({
           {cerrar}
         </header>
       )}
-      <div className="panel-cuerpo">
-        {/* La portada va dentro del contenido para que el avatar pueda montarse sobre ella. */}
-        {portada && <div className="panel-portada" style={{ background: portada }} />}
-        {children}
-      </div>
+      {completo && lateral ? (
+        <div className="panel-con-lateral">
+          <div className="panel-lateral">{lateral}</div>
+          {cuerpo}
+        </div>
+      ) : (
+        cuerpo
+      )}
     </aside>
   );
 }

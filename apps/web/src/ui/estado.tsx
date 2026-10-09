@@ -12,6 +12,8 @@ export type PanelAbierto =
   | { tipo: 'bienvenida' }
   /** Casa o lote disponible. `barrio` dice en qué villa (si falta, la villa actual). */
   | { tipo: 'lote'; lote: number; barrio?: Barrio }
+  /** Lote disponible: ofrece la acción del rol del modo (publicar lo que necesitas o abrir tu local). */
+  | { tipo: 'lote-libre'; barrio: Barrio }
   | { tipo: 'servicio'; servicioId: string }
   | { tipo: 'pedidos' }
   | { tipo: 'pedido'; id: string }
@@ -49,6 +51,8 @@ export type PanelAbierto =
   | { tipo: 'wallets' }
   /** Pasar USDC a mi cuenta del banco (rampa; simulada en testnet). */
   | { tipo: 'retiro' }
+  /** Recargar USDC con el QR del banco, sin un pedido (rampa; simulada en testnet). */
+  | { tipo: 'recargar' }
   /** Reportar contenido o a una persona. */
   | { tipo: 'reportar'; reporte: TipoReporte; objetoId: string; nombre: string }
   /** Avisos fuera de la app (navegador y correo) y personas bloqueadas. */
@@ -102,6 +106,13 @@ interface EstadoApp {
   /** Modo de la villa: «Quiero contratar» (casas de los locales) o «Quiero trabajar» (casas de los «Se busca»). */
   modo: ModoVilla;
   cambiarModo(modo: ModoVilla): void;
+  /**
+   * Lleva al jugador a un local. Los locales están en «Quiero contratar»: si estás en «Quiero trabajar»,
+   * primero cambia de modo. `destino`: el local o el edificio de la persona en la Plaza (fase 7; por ahora, el local).
+   */
+  irAlLocal(local: { barrio: Barrio; lote: number }, destino?: 'local' | 'edificio'): void;
+  /** Lleva al cartel de un «Se busca» (están en «Quiero trabajar»: si hace falta, cambia de modo). */
+  irAlSeBusca(b: { barrio: Barrio; lote: number }): void;
   /** «Se busca» abiertos: las casas del modo «Quiero trabajar». */
   seBusca: BusquedaPublica[];
   /** Cambia cada vez que llega un cambio en vivo (pedidos, pasos, mensajes, avisos). */
@@ -205,6 +216,23 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
     emitir('modo', m);
   }, []);
 
+  const irAlLocal = useCallback(
+    (local: { barrio: Barrio; lote: number }, _destino: 'local' | 'edificio' = 'local') => {
+      // El modo cambia primero: la villa se reinicia y cumple el destino al volver a cargar.
+      if (modo !== 'contratar') cambiarModo('contratar');
+      emitir('ir-a-local', { barrio: local.barrio, lote: local.lote });
+    },
+    [modo, cambiarModo],
+  );
+
+  const irAlSeBusca = useCallback(
+    (b: { barrio: Barrio; lote: number }) => {
+      if (modo !== 'trabajar') cambiarModo('trabajar');
+      emitir('ir-a-local', { barrio: b.barrio, lote: b.lote });
+    },
+    [modo, cambiarModo],
+  );
+
   // Los «Se busca» abiertos son las casas del modo «Quiero trabajar» (lectura pública).
   const recargarSeBusca = useCallback(async () => {
     try {
@@ -305,6 +333,8 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
       irASector,
       modo,
       cambiarModo,
+      irAlLocal,
+      irAlSeBusca,
       seBusca,
       version,
       refrescar,
@@ -320,7 +350,7 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
       mensajeCercania,
       registrarMensaje,
     }),
-    [panel, pila.length, abrir, atras, cerrar, cambiar, locales, recargarPueblo, villa, irAVilla, sector, irASector, modo, cambiarModo, seBusca, version, refrescar, avisosSinLeer, notificaciones, notificar, avisar, descartar, chatCon, abrirChat, cerrarChat, mensajeCercania, registrarMensaje],
+    [panel, pila.length, abrir, atras, cerrar, cambiar, locales, recargarPueblo, villa, irAVilla, sector, irASector, modo, cambiarModo, irAlLocal, irAlSeBusca, seBusca, version, refrescar, avisosSinLeer, notificaciones, notificar, avisar, descartar, chatCon, abrirChat, cerrarChat, mensajeCercania, registrarMensaje],
   );
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
 }

@@ -1,6 +1,8 @@
 import {
+  AVATAR_INVITADO,
   BARRIOS,
   LISTA_BARRIOS,
+  aparienciaDeAvatar,
   aparienciaDeUsuario,
   datosDocumento,
   nombreSector,
@@ -9,7 +11,7 @@ import {
   type DatosDocumento,
 } from '@cryptoville/shared';
 import { useEffect, useRef, useState } from 'react';
-import { COLOR_SE_BUSCA } from './arte/casa';
+import { esTactil } from './lib/dispositivo';
 import { edificioCentral } from './arte/villa';
 import { seBuscaEnMapa, type BusquedaPublica } from './features/busquedas/datos';
 import { ProveedorSesion, useSesion } from './features/auth/sesion';
@@ -37,7 +39,7 @@ import { PanelAceptarLegal, PanelLegal } from './ui/panels/PanelLegal';
 import { PanelWallets } from './ui/panels/PanelWallets';
 import { PanelAvisosFuera, PanelReportar } from './ui/panels/PanelConfianza';
 import { PanelDatosCuriosos } from './ui/panels/PanelDatosCuriosos';
-import { PanelLote } from './ui/panels/PanelLote';
+import { PanelLote, PanelLoteLibre } from './ui/panels/PanelLote';
 import { PanelMiLocal } from './ui/panels/PanelMiLocal';
 import { PanelMisLocales } from './ui/panels/PanelMisLocales';
 import { PanelMiPortafolio, PanelPortafolio, PanelProyecto } from './ui/panels/PanelPortafolio';
@@ -46,9 +48,10 @@ import { PanelPedidos } from './ui/panels/PanelPedidos';
 import { PanelPerfil, PanelPersonaje, PanelPersonalizar } from './ui/panels/PanelPerfil';
 import { PanelPublicarBusqueda } from './ui/panels/PanelPublicarBusqueda';
 import { PanelRetiro } from './ui/panels/PanelRetiro';
+import { PanelRecargar, SaldoArriba } from './ui/pagos/Saldo';
+import { Escribiendo } from './ui/components/Escribiendo';
 import { PanelServicio } from './ui/panels/PanelServicio';
 
-const esTactil = () => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
 
 /** Pista de la lupa en el modo «Quiero contratar», con las categorías de la villa. */
 const TEXTO_BUSCAR: Record<Barrio, string> = {
@@ -102,7 +105,7 @@ export function App() {
 }
 
 function Pueblo() {
-  const { usuario, recargar } = useSesion();
+  const { usuario, recargar, locales: misLocales } = useSesion();
   const {
     panel,
     abrir,
@@ -123,6 +126,7 @@ function Pueblo() {
     avisar,
     chatCon,
     abrirChat,
+    cerrarChat,
   } = useEstado();
   // Chat por cercanía: quién está cerca para hablar («Hablar con… [H]»).
   const [personaCerca, setPersonaCerca] = useState<{ id: string; nombre: string } | null>(null);
@@ -133,6 +137,18 @@ function Pueblo() {
   const interiorAbierto = useRef(false);
   const [tactil] = useState(esTactil);
   const [pendientesLegales, setPendientesLegales] = useState<DatosDocumento[]>([]);
+  // «Mis pedidos» a pantalla completa: la elección se recuerda en este navegador.
+  const [pedidosCompleto, setPedidosCompleto] = useState(leerPedidosCompleto);
+  const alternarPedidosCompleto = () =>
+    setPedidosCompleto((c) => {
+      guardarPedidosCompleto(!c);
+      return !c;
+    });
+  const enPedidos = panel?.tipo === 'pedidos' || panel?.tipo === 'pedido';
+  // Mientras «Mis pedidos» está abierto, tu personaje escribe en su libro en la villa.
+  useEffect(() => {
+    emitir('escribiendo', Boolean(usuario) && enPedidos);
+  }, [enPedidos, usuario]);
   const enTestnet = obtenerConfig().red === 'testnet';
 
   // Enlaces que llegan por correo o notificación: ?pedido=…, ?se-busca=…, ?kyc=volver, ?correo=… (una sola vez).
@@ -208,8 +224,9 @@ function Pueblo() {
   seBuscaRef.current = seBusca;
   const modoRef = useRef(modo);
   modoRef.current = modo;
-  const aparienciaRef = useRef<AparienciaPersona | null>(null);
-  aparienciaRef.current = usuario ? aparienciaDeUsuario(usuario) : null;
+  // Sin sesión, la villa muestra el personaje de invitado (no el de la última cuenta).
+  const aparienciaRef = useRef<AparienciaPersona>(aparienciaDeAvatar(AVATAR_INVITADO));
+  aparienciaRef.current = usuario ? aparienciaDeUsuario(usuario) : aparienciaDeAvatar(AVATAR_INVITADO);
   const hayPanel = useRef(false);
   hayPanel.current = panel !== null;
   useEffect(() => {
@@ -220,26 +237,14 @@ function Pueblo() {
           abrir({ tipo: 'datos-curiosos', barrio: p.barrio });
           return;
         }
-        // Modo «Quiero trabajar»: la casa es un «Se busca»; se entra igual que a un local.
+        // Modo «Quiero trabajar»: cada «Se busca» es un cartel de aviso; se lee directo, sin interior.
         if (p.tipo === 'se-busca' && p.busquedaId) {
-          const b = seBuscaRef.current.find((x) => x.id === p.busquedaId);
-          if (b) {
-            interiorAbierto.current = true;
-            emitir('abrir-interior', {
-              nombre: b.titulo,
-              avatarDueno: b.autor.avatar,
-              aparienciaDueno: b.autor.apariencia,
-              barrio: b.barrio,
-              color: COLOR_SE_BUSCA,
-              aparienciaCasa: null,
-            });
-          }
           abrir({ tipo: 'busqueda', id: p.busquedaId });
           return;
         }
-        // En ese modo, el lote disponible sirve para publicar un «Se busca» en esa villa.
-        if (p.tipo === 'lote-libre' && modoRef.current === 'trabajar') {
-          abrir({ tipo: 'publicar-busqueda', barrio: p.barrio });
+        // El lote disponible ofrece lo del rol de cada modo (publicar lo que necesitas o abrir tu local).
+        if (p.tipo === 'lote-libre') {
+          abrir({ tipo: 'lote-libre', barrio: p.barrio });
           return;
         }
         if (p.lote === null) return;
@@ -270,7 +275,7 @@ function Pueblo() {
         emitir('locales', localesRef.current.map(localEnMapa));
         emitir('se-busca', seBuscaRef.current.map(seBuscaEnMapa));
         emitir('modo', modoRef.current);
-        if (aparienciaRef.current) emitir('apariencia', aparienciaRef.current);
+        emitir('apariencia', aparienciaRef.current);
         // La escena recién creada no sabe si hay un panel abierto (por ejemplo, la bienvenida).
         emitir('controles', !hayPanel.current);
       }),
@@ -279,8 +284,18 @@ function Pueblo() {
   }, [abrir, cerrar, abrirChat]);
 
   useEffect(() => {
-    if (usuario) emitir('apariencia', aparienciaDeUsuario(usuario));
+    emitir('apariencia', usuario ? aparienciaDeUsuario(usuario) : aparienciaDeAvatar(AVATAR_INVITADO));
   }, [usuario]);
+
+  // Al cerrar sesión se cierra todo lo que era de esa cuenta: paneles (pedidos, perfil, wallets…) y el chat.
+  const habiaSesion = useRef(false);
+  useEffect(() => {
+    if (habiaSesion.current && !usuario) {
+      cerrar();
+      cerrarChat();
+    }
+    habiaSesion.current = Boolean(usuario);
+  }, [usuario, cerrar, cerrarChat]);
 
   // Al cerrar todos los paneles, se sale del interior.
   useEffect(() => {
@@ -317,7 +332,7 @@ function Pueblo() {
           Modo de prueba: el dinero no es real
         </div>
       )}
-      <header className="barra">
+      <header className={`barra ${usuario ? 'con-sesion' : ''}`}>
         <div className="barra-lado">
           <button type="button" className="pastilla logo" onClick={() => abrir({ tipo: 'bienvenida' })} aria-label="WorkVille: ¿cómo funciona?">
             <LogoIcono />
@@ -364,6 +379,21 @@ function Pueblo() {
         </div>
 
         <div className="barra-lado barra-derecha">
+          {/* Lo que crea el rol de cada modo: quien contrata publica lo que necesita; quien trabaja, su local. */}
+          <button
+            type="button"
+            className={`pastilla accion-rol rol-${modo}`}
+            onClick={() => {
+              if (!usuario) abrir({ tipo: 'bienvenida' });
+              else if (modo === 'contratar') abrir({ tipo: 'publicar-busqueda', barrio: villa });
+              else abrir(misLocales.length ? { tipo: 'mis-locales' } : { tipo: 'mi-local' });
+            }}
+            title={modo === 'contratar' ? 'Publicar lo que necesito' : misLocales.length ? 'Mis locales' : 'Abrir mi local'}
+            aria-label={modo === 'contratar' ? 'Publicar lo que necesito' : misLocales.length ? 'Mis locales' : 'Abrir mi local'}
+          >
+            <Icono nombre={modo === 'contratar' ? 'mas' : 'casa'} />
+            <span className="solo-ancho-barra">{modo === 'contratar' ? 'Publicar lo que necesito' : misLocales.length ? 'Mis locales' : 'Abrir mi local'}</span>
+          </button>
           <button
             type="button"
             className="pastilla cuadro"
@@ -375,7 +405,7 @@ function Pueblo() {
           </button>
           {usuario ? (
             <>
-              <button type="button" className="pastilla" onClick={() => abrir({ tipo: 'pedidos' })} aria-label="Mis pedidos">
+              <button type="button" className="pastilla pastilla-pedidos" onClick={() => abrir({ tipo: 'pedidos' })} aria-label="Mis pedidos">
                 <Icono nombre="pedidos" />
                 <span className="solo-ancho">Mis pedidos</span>
               </button>
@@ -383,6 +413,7 @@ function Pueblo() {
                 <Icono nombre="campana" />
                 {avisosSinLeer > 0 && <span className="contador">{avisosSinLeer > 99 ? '99+' : avisosSinLeer}</span>}
               </button>
+              <SaldoArriba />
               <button type="button" className="pastilla cuadro pastilla-avatar" onClick={() => abrir({ tipo: 'perfil' })} aria-label={`Mi perfil: ${usuario.nombre}`}>
                 <Avatar frame={usuario.avatar} apariencia={usuario.apariencia} tamano={40} titulo={usuario.nombre} />
               </button>
@@ -464,6 +495,9 @@ function Pueblo() {
           titulo={tituloPanel(panel, locales, villa)}
           portada={portadaPanel(panel, locales, villa)}
           amplio={['pedido', 'perfil', 'mi-local', 'mis-locales', 'personaje', 'portafolio', 'proyecto', 'mi-portafolio', 'arbitro', 'busqueda', 'legal', 'comentarios-equipo'].includes(panel.tipo)}
+          completo={enPedidos && pedidosCompleto}
+          onAlternarCompleto={enPedidos ? alternarPedidosCompleto : undefined}
+          lateral={usuario ? <Escribiendo avatar={usuario.avatar} apariencia={usuario.apariencia ?? null} /> : undefined}
           onCerrar={panel.tipo === 'bienvenida' ? cerrarBienvenida : cerrar}
           onAtras={puedeVolver ? atras : undefined}
         >
@@ -499,14 +533,32 @@ function Pueblo() {
   );
 }
 
+const CLAVE_PEDIDOS_COMPLETO = 'cryptoville-pedidos-completo';
+
+function leerPedidosCompleto(): boolean {
+  try {
+    return localStorage.getItem(CLAVE_PEDIDOS_COMPLETO) === 'si';
+  } catch {
+    return false;
+  }
+}
+
+function guardarPedidosCompleto(completo: boolean): void {
+  try {
+    localStorage.setItem(CLAVE_PEDIDOS_COMPLETO, completo ? 'si' : 'no');
+  } catch {
+    // Sin almacenamiento: la elección vale solo hasta recargar.
+  }
+}
+
 function textoPuerta(p: Puerta | null, modo: ModoVilla, locales: LocalDelPueblo[], seBusca: BusquedaPublica[]): string | null {
   if (!p) return null;
   if (p.tipo === 'sector') return `Ir a Villa ${nombreSector(BARRIOS[p.barrio].nombre, p.sector ?? 1)}`;
-  if (p.tipo === 'lote-libre') return modo === 'trabajar' ? 'Publicar lo que necesitas' : 'Ver lote disponible';
+  if (p.tipo === 'lote-libre') return modo === 'trabajar' ? 'Abrir tu local' : 'Publicar lo que necesitas';
   if (p.tipo === 'edificio') return `Entrar a ${edificioCentral(p.barrio).nombre}`;
   if (p.tipo === 'se-busca') {
     const b = seBusca.find((x) => x.id === p.busquedaId);
-    return b ? `Entrar a «${b.titulo}»` : 'Ver el «Se busca»';
+    return b ? `Leer «${b.titulo}»` : 'Ver el «Se busca»';
   }
   const local = locales.find((l) => l.barrio === p.barrio && l.lote === p.lote);
   return local ? `Entrar a ${local.nombre}` : 'Ver lote disponible';
@@ -531,6 +583,8 @@ function tituloPanel(p: PanelAbierto, locales: LocalDelPueblo[], villa: Barrio):
       return 'Bienvenido a WorkVille';
     case 'lote':
       return localDelPanel(p, locales, villa)?.nombre ?? 'Lote disponible';
+    case 'lote-libre':
+      return 'Lote disponible';
     case 'servicio':
       return 'Servicio';
     case 'pedidos':
@@ -580,6 +634,8 @@ function tituloPanel(p: PanelAbierto, locales: LocalDelPueblo[], villa: Barrio):
       return 'Mis wallets';
     case 'retiro':
       return 'Pasar a mi banco';
+    case 'recargar':
+      return 'Recargar con el QR de tu banco';
     case 'reportar':
       return 'Reportar';
     case 'avisos-config':
@@ -599,6 +655,8 @@ function contenidoPanel(
       return <PanelBienvenida onListo={cerrarBienvenida} />;
     case 'lote':
       return <PanelLote lote={p.lote} barrio={p.barrio ?? villa} />;
+    case 'lote-libre':
+      return <PanelLoteLibre barrio={p.barrio} />;
     case 'servicio':
       return <PanelServicio servicioId={p.servicioId} />;
     case 'pedidos':
@@ -649,6 +707,8 @@ function contenidoPanel(
       return <PanelWallets />;
     case 'retiro':
       return <PanelRetiro />;
+    case 'recargar':
+      return <PanelRecargar />;
     case 'reportar':
       return <PanelReportar key={p.objetoId} reporte={p.reporte} objetoId={p.objetoId} nombre={p.nombre} />;
     case 'avisos-config':

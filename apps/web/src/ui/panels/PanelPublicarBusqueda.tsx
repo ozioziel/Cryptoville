@@ -50,9 +50,13 @@ export function PanelPublicarBusqueda({ barrio: inicial }: { barrio: Barrio }) {
       const b = await api<{ id: string; barrio: Barrio; lote: number }>('/busquedas', {
         cuerpo: { titulo, descripcion, barrio, categoria, presupuesto_usdc: presupuesto.trim(), fecha_limite: limite },
       });
-      notificar('Publicaste tu «Se busca». Te avisamos cuando lleguen propuestas.', null, b.id);
+      notificar(
+        'Publicaste tu «Se busca». Aparece como un cartel en «Quiero trabajar», donde lo ven los proveedores. Te avisamos cuando lleguen propuestas.',
+        null,
+        b.id,
+      );
       refrescar();
-      // En el modo «Quiero trabajar» su casa aparece en la villa: se lleva al jugador frente a ella.
+      // En el modo «Quiero trabajar» su cartel aparece en la villa: se lleva al jugador frente a él.
       if (modo === 'trabajar') emitir('ir-a-local', { barrio: b.barrio, lote: b.lote });
       cambiar({ tipo: 'busqueda', id: b.id });
     } catch (e) {

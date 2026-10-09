@@ -444,7 +444,7 @@ kbd {
 }
 .panel-cabecera {
   display: grid;
-  grid-template-columns: 36px 1fr 36px;
+  grid-template-columns: minmax(36px, auto) 1fr minmax(36px, auto);
   align-items: center;
   gap: 4px;
   padding: 10px 12px;
@@ -2150,11 +2150,26 @@ button.cartel:focus-visible {
 }
 
 /* ---------- Mis locales ---------- */
+/* Tarjeta de «Mis locales»: color a la izquierda, datos arriba y los botones debajo (así el nombre no se aprieta). */
 .tarjeta-local {
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  column-gap: 12px;
+  row-gap: 10px;
+  align-items: start;
+}
+.tarjeta-local > .fila {
+  grid-column: 2;
+  flex-wrap: wrap;
+}
+/* Los servicios de un local se despliegan debajo de su fila, a todo el ancho. */
+.servicios-del-local {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--linea);
+  padding-top: 8px;
 }
 .tarjeta-local-color {
-  flex: none;
+  grid-row: 1 / span 2;
   width: 10px;
   align-self: stretch;
   border-radius: 999px;
@@ -2500,5 +2515,268 @@ button.cartel:focus-visible {
     width: auto;
     bottom: calc(max(16px, env(safe-area-inset-bottom)) + 120px);
     max-height: 46dvh;
+  }
+}
+
+/* ---------- Saldo arriba (fase 4) ---------- */
+.saldo {
+  position: relative;
+}
+.saldo-boton strong {
+  font-variant-numeric: tabular-nums;
+}
+.saldo-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 250px;
+  padding: 8px;
+  background: var(--papel);
+  border: 1px solid var(--linea);
+  border-radius: var(--radio);
+  box-shadow: var(--sombra);
+}
+.saldo-menu-titulo {
+  margin: 4px 8px 6px;
+  font-size: 14px;
+}
+.saldo-opcion {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--tinta);
+  font: 600 14px var(--fuente);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+.saldo-opcion:hover,
+.saldo-opcion:focus-visible {
+  background: var(--crema);
+}
+@media (max-width: 560px) {
+  .saldo-boton {
+    padding: 0 10px;
+  }
+  .saldo-menu {
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    top: 64px;
+    min-width: 0;
+  }
+}
+
+.saldo-corto {
+  display: none;
+}
+
+/* ---------- Barra con sesión: rol, pedidos, avisos, saldo y perfil ---------- */
+/* Las etiquetas se esconden de a poco para que nada se encime con el interruptor del centro. */
+@media (max-width: 1699px) {
+  .barra.con-sesion .accion-rol .solo-ancho-barra {
+    display: none;
+  }
+  .barra.con-sesion .accion-rol {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+@media (max-width: 1439px) {
+  .barra.con-sesion .pastilla-pedidos .solo-ancho {
+    display: none;
+  }
+  .barra.con-sesion .pastilla:has(.solo-ancho):not(.buscar):not(.villa-actual) {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+@media (max-width: 1279px) {
+  .accion-rol .solo-ancho-barra,
+  .saldo-unidad {
+    display: none;
+  }
+  .accion-rol {
+    width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+}
+/* Tableta: el interruptor deja de estar centrado y la villa actual se ve abajo (en la barra de villas). */
+@media (max-width: 1179px) and (min-width: 701px) {
+  .barra.con-sesion {
+    grid-template-columns: auto auto auto;
+    justify-content: space-between;
+  }
+  .barra.con-sesion .villa-actual {
+    display: none;
+  }
+}
+/* Celular: botones un poco más chicos y el del rol pasa a un botón redondo abajo a la derecha. */
+@media (max-width: 700px) {
+  .barra.con-sesion,
+  .barra.con-sesion > .barra-lado {
+    gap: 4px;
+  }
+  .barra.con-sesion .pastilla {
+    height: 36px;
+  }
+  .barra.con-sesion .cuadro,
+  .barra.con-sesion .logo,
+  .barra.con-sesion .pastilla:has(.solo-ancho):not(.buscar):not(.villa-actual) {
+    width: 36px;
+    flex: 0 0 36px;
+  }
+  .barra.con-sesion .modo-boton {
+    width: 34px;
+    height: 30px;
+  }
+  .barra.con-sesion .saldo-boton {
+    padding: 0 8px;
+  }
+  .barra.con-sesion .pastilla-avatar .avatar {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  .saldo-largo:has(+ .saldo-corto) {
+    display: none;
+  }
+  .saldo-corto {
+    display: inline;
+  }
+  .barra.con-sesion .accion-rol {
+    position: fixed;
+    right: max(20px, env(safe-area-inset-right));
+    bottom: calc(max(28px, env(safe-area-inset-bottom)) + 34px);
+    width: 52px;
+    height: 52px;
+    flex: none;
+    border-radius: 50%;
+    box-shadow: 0 4px 0 var(--linea-fuerte), var(--sombra);
+  }
+  .barra.con-sesion .accion-rol.rol-contratar {
+    background: #fbe8e1;
+    color: var(--primario-oscuro);
+  }
+  .barra.con-sesion .accion-rol.rol-trabajar {
+    background: #fbf0d6;
+    color: #8a6412;
+  }
+}
+@media (max-width: 370px) {
+  .barra.con-sesion .logo {
+    display: none;
+  }
+}
+
+/* ---------- Panel a pantalla completa («Mis pedidos», fase 5) ---------- */
+.panel-botones {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.panel-completo {
+  position: fixed;
+  top: 76px;
+  left: max(16px, env(safe-area-inset-left));
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  width: auto;
+  max-width: none;
+  z-index: 35;
+}
+.panel-con-lateral {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(180px, 260px) 1fr;
+}
+.panel-con-lateral .panel-cuerpo {
+  min-height: 0;
+}
+.panel-lateral {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-right: 1px solid var(--linea);
+  background: var(--crema);
+}
+@media (max-width: 720px) {
+  .panel-con-lateral {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  .panel-lateral {
+    border-right: 0;
+    border-bottom: 1px solid var(--linea);
+    padding: 8px 0;
+  }
+}
+
+/* El personaje escribiendo en su libro (al costado de «Mis pedidos»). */
+.escribiendo {
+  position: relative;
+  width: 132px;
+  height: 196px;
+}
+.escribiendo-persona svg {
+  width: 132px;
+  height: auto;
+}
+.escribiendo-libro {
+  position: absolute;
+  left: 32px;
+  top: 104px;
+  width: 70px;
+}
+.escribiendo-lapiz {
+  position: absolute;
+  left: 58px;
+  top: 92px;
+  width: 34px;
+  transform-origin: 15% 85%;
+  animation: escribir-lapiz 0.84s ease-in-out infinite;
+}
+.escribiendo-libro svg,
+.escribiendo-lapiz svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+@keyframes escribir-lapiz {
+  0%,
+  100% {
+    transform: translateX(0) rotate(-6deg);
+  }
+  25% {
+    transform: translateX(8px) rotate(6deg);
+  }
+  50% {
+    transform: translateX(16px) rotate(-6deg);
+  }
+  75% {
+    transform: translateX(8px) rotate(6deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .escribiendo-lapiz {
+    animation: none;
+  }
+}
+@media (max-width: 720px) {
+  .escribiendo {
+    transform: scale(0.6);
+    height: 120px;
+    transform-origin: top center;
   }
 }

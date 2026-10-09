@@ -7,6 +7,7 @@
 // - El nombre del local lo escribe Phaser encima del letrero (las texturas SVG no cargan fuentes web);
 //   en React (vista previa del editor) se puede incluir con `conNombre`.
 import {
+  BARRIOS,
   CATALOGO_CASA,
   colorDe,
   normalizarAparienciaCasa,
@@ -106,7 +107,83 @@ export function crearCasa(d: DatosCasa, opciones: { tamano?: { ancho: number; al
 // Exterior
 // ---------------------------------------------------------------
 
-/** Cartel «SE BUSCA» pegado en la vitrina (las texturas no cargan fuentes web: se usa una del sistema). */
+/**
+ * Cartel de aviso de un «Se busca» (modo «Quiero trabajar»): un tablero sobre dos postes con un papel clavado
+ * que dice SE BUSCA, el título y el presupuesto. Ocupa el mismo lugar que una casa (ANCHO_CASA × ALTO_CASA),
+ * así el plano y las puertas no cambian. Las texturas no cargan fuentes web: se usa una del sistema.
+ */
+export function crearCartelSeBusca(
+  d: { barrio: Barrio; titulo: string; presupuesto?: string | null },
+  opciones: { tamano?: { ancho: number; alto: number }; titulo?: string } = {},
+): string {
+  const villa = BARRIOS[d.barrio];
+  const madera = '#9a7653';
+  const lineas = partirEnLineas(d.titulo, 17, 2);
+  const fuente = `font-family="Arial, Helvetica, sans-serif"`;
+  const partes = [
+    // Sombra en el piso.
+    `<ellipse cx="75" cy="162" rx="58" ry="7" fill="${TINTA}" opacity=".12"/>`,
+    `<g stroke="${TINTA}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round">`,
+    // Postes.
+    `<rect x="26" y="70" width="10" height="92" rx="2" fill="${madera}"/>`,
+    `<rect x="114" y="70" width="10" height="92" rx="2" fill="${madera}"/>`,
+    // Tablero con el marco del color de la villa.
+    `<rect x="8" y="16" width="134" height="112" rx="7" fill="${villa.colorOscuro}"/>`,
+    `<rect x="15" y="23" width="120" height="98" rx="4" fill="#e7d3ab" stroke-width="1.6"/>`,
+    // Techito de madera.
+    `<rect x="3" y="9" width="144" height="10" rx="4" fill="${oscurecer(madera, 0.12)}"/>`,
+    `</g>`,
+    // Textura del corcho.
+    `<g fill="${oscurecer('#e7d3ab', 0.18)}">`,
+    `<circle cx="24" cy="112" r="1.2"/><circle cx="126" cy="34" r="1.2"/><circle cx="128" cy="110" r="1.2"/><circle cx="22" cy="40" r="1.2"/>`,
+    `</g>`,
+    // El papel del aviso, apenas torcido, con su chinche.
+    `<g transform="rotate(-2 75 72)" stroke="${TINTA}" stroke-linejoin="round">`,
+    `<rect x="26" y="30" width="98" height="84" rx="2" fill="#fffaf0" stroke-width="1.6"/>`,
+    `<rect x="26" y="30" width="98" height="20" rx="2" fill="${DORADO}" stroke-width="1.6"/>`,
+    `<circle cx="75" cy="30" r="3.2" fill="${villa.color}" stroke-width="1.2"/>`,
+    `<text x="75" y="44.5" text-anchor="middle" ${fuente} font-weight="700" font-size="11" letter-spacing="1.6" fill="#5c4310" stroke="none">SE BUSCA</text>`,
+    ...lineas.map(
+      (l, i) =>
+        `<text x="75" y="${66 + i * 13}" text-anchor="middle" ${fuente} font-weight="700" font-size="10" fill="${TINTA}" stroke="none">${escaparTexto(l)}</text>`,
+    ),
+    d.presupuesto
+      ? `<rect x="40" y="93" width="70" height="15" rx="7.5" fill="${villa.colorSuave}" stroke="${villa.colorOscuro}" stroke-width="1.2"/>` +
+        `<text x="75" y="103.6" text-anchor="middle" ${fuente} font-weight="700" font-size="8.5" fill="${villa.colorOscuro}" stroke="none">${escaparTexto(d.presupuesto)}</text>`
+      : '',
+    `</g>`,
+  ];
+  return envolver(`0 0 ${ANCHO_CASA} ${ALTO_CASA}`, partes.join(''), opciones.tamano, opciones.titulo);
+}
+
+/** Parte un texto en hasta `max` líneas de unas `ancho` letras (la última termina en «…» si no entra). */
+function partirEnLineas(texto: string, ancho: number, max: number): string[] {
+  const palabras = texto.trim().split(/\s+/);
+  const lineas: string[] = [];
+  let actual = '';
+  for (const p of palabras) {
+    const candidata = actual ? `${actual} ${p}` : p;
+    if (candidata.length <= ancho) actual = candidata;
+    else {
+      if (actual) lineas.push(actual);
+      actual = p.length > ancho ? `${p.slice(0, ancho - 1)}…` : p;
+    }
+    if (lineas.length === max) break;
+  }
+  if (lineas.length < max && actual) lineas.push(actual);
+  const usadas = lineas.join(' ').length;
+  if (usadas < texto.trim().length && lineas.length) {
+    const u = lineas.length - 1;
+    lineas[u] = lineas[u].length >= ancho ? `${lineas[u].slice(0, ancho - 1)}…` : `${lineas[u]}…`;
+  }
+  return lineas.slice(0, max);
+}
+
+/**
+ * @deprecated Desde que cada «Se busca» es un cartel de aviso (`crearCartelSeBusca`). Se conserva para la
+ * casa con afiche, que ya no se dibuja en la villa.
+ * Cartel «SE BUSCA» pegado en la vitrina (las texturas no cargan fuentes web: se usa una del sistema).
+ */
 function cartelEnVitrina(): string {
   return (
     `<g transform="rotate(-3 45 138)" stroke="${TINTA}" stroke-linejoin="round">` +

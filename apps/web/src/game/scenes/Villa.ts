@@ -1,4 +1,5 @@
 import {
+  AVATAR_INVITADO,
   BARRIOS,
   aparienciaDeAvatar,
   aparienciaDeUsuario,
@@ -13,7 +14,8 @@ import {
   type RedStellar,
 } from '@cryptoville/shared';
 import Phaser from 'phaser';
-import { ALTO_CASA, ANCHO_CASA, COLOR_SE_BUSCA, LETRERO_CASA, colorTextoLetrero, crearCasa } from '../../arte/casa';
+import { ALTO_CASA, ANCHO_CASA, COLOR_SE_BUSCA, LETRERO_CASA, colorTextoLetrero, crearCartelSeBusca, crearCasa } from '../../arte/casa';
+import { ALTO_LAPIZ, ALTO_LIBRO, ANCHO_LAPIZ, ANCHO_LIBRO, crearLapiz, crearLibroAbierto } from '../../arte/escribir';
 import { asegurarPersona } from '../animacionPersona';
 import { hashTexto, azar } from '../../arte/svg';
 import {
@@ -50,13 +52,14 @@ const MARGEN_VISTA = 320;
 const MARGEN_SALIDA = 760;
 const DX = plano.DESPLAZAMIENTO_PLAZA;
 
-/** Lo que se dibuja como casa: un local (modo contratar) o un «Se busca» (modo trabajar). */
-type CasaDeVilla = LocalEnMapa & { busquedaId?: string };
+/** Lo que se dibuja en un lote: un local (modo contratar) o el cartel de un «Se busca» (modo trabajar). */
+type CasaDeVilla = LocalEnMapa & { busquedaId?: string; presupuesto?: string | null };
 
-/** Un «Se busca» se dibuja con la casa base de su villa, en mostaza y con su cartel. */
+/** Un «Se busca» se dibuja como un cartel de aviso en su lote (ver `crearCartelSeBusca`). */
 const casaDeSeBusca = (b: SeBuscaEnMapa): CasaDeVilla => ({
   id: b.id,
   busquedaId: b.id,
+  presupuesto: b.presupuesto ?? null,
   barrio: b.barrio,
   lote: b.lote,
   nombre: b.titulo,
@@ -105,6 +108,8 @@ export class Villa extends Phaser.Scene {
   readonly barrio: Barrio;
   private tema: TemaVilla;
   private jugador!: Jugador;
+  /** El libro y el lápiz del jugador mientras «Mis pedidos» está abierto. */
+  private escritura: Phaser.GameObjects.Image[] = [];
   private teclas!: Record<'arriba' | 'abajo' | 'izq' | 'der' | 'w' | 'a' | 's' | 'd' | 'entrar' | 'entrar2' | 'hablar', Phaser.Input.Keyboard.Key>;
   /** Las otras personas en línea, los nombres sobre las cabezas y los globos del chat. */
   private personas!: PersonasEnVilla;
@@ -245,13 +250,21 @@ export class Villa extends Phaser.Scene {
         if (!this.registry.get('apariencia')) this.cambiarPersona(aparienciaDeAvatar(frame));
       }),
       escuchar('joystick', (x, y) => this.joystick.set(x, y)),
+      escuchar('escribiendo', (activo) => {
+        this.registry.set('escribiendo', activo);
+        this.ponerEscritura(activo);
+      }),
       escuchar('controles', (activos) => {
         this.controlesActivos = activos;
         if (!activos) this.jugador.mover(0, 0);
       }),
       escuchar('pedir-entrar', () => this.entrar()),
       escuchar('ir-a-lote', (lote) => this.irALote(lote)),
-      escuchar('ir-a-local', ({ barrio, lote }) => (barrio === this.barrio ? this.irALote(lote) : this.viajar(barrio, lote))),
+      escuchar('ir-a-local', (destino) => {
+        // Si la escena está por reiniciarse (por ejemplo, porque cambió el modo), el destino se cumple al volver.
+        if (this.viajando) this.registry.set('destino-pendiente', destino);
+        else this.irALocal(destino);
+      }),
       escuchar('ir-a-villa', (barrio) => barrio !== this.barrio && this.viajar(barrio, null)),
       escuchar('ir-a-sector', (sector) => this.irASector(sector)),
       escuchar('abrir-interior', (datos) => {
@@ -300,6 +313,47 @@ export class Villa extends Phaser.Scene {
     emitir('villa-actual', this.barrio);
     this.anunciarSector();
     emitir('pueblo-listo');
+    // Si «Mis pedidos» quedó abierto al cambiar de escena, el jugador sigue escribiendo.
+    if (this.registry.get('escribiendo')) this.ponerEscritura(true);
+    const pendiente = this.registry.get('destino-pendiente') as { barrio: Barrio; lote: number } | null | undefined;
+    if (pendiente) {
+      this.registry.set('destino-pendiente', null);
+      this.irALocal(pendiente);
+    }
+  }
+
+  /** El jugador escribe en un libro: libro abierto en las manos y el lápiz que va y viene. */
+  private ponerEscritura(activo: boolean): void {
+    for (const o of this.escritura) o.destroy();
+    this.escritura = [];
+    if (!activo || !this.jugador) return;
+    const R = this.resolucion;
+    const claveLibro = `libro-abierto@${R}`;
+    const claveLapiz = `lapiz@${R}`;
+    marcarPermanente(claveLibro);
+    marcarPermanente(claveLapiz);
+    const x = this.jugador.x;
+    const y = this.jugador.y - ALTO_JUGADOR * 0.32;
+    void Promise.all([
+      asegurarTextura(this, claveLibro, (t) => crearLibroAbierto({ tamano: t }), ANCHO_LIBRO, ALTO_LIBRO, R),
+      asegurarTextura(this, claveLapiz, (t) => crearLapiz({ tamano: t }), ANCHO_LAPIZ, ALTO_LAPIZ, R),
+    ]).then(([okLibro, okLapiz]) => {
+      if (!okLibro || !okLapiz || !this.registry.get('escribiendo') || this.escritura.length) return;
+      const profundidad = this.jugador.depth + 0.5;
+      const libro = this.add.image(x, y, claveLibro).setScale(1 / R).setDepth(profundidad);
+      const lapiz = this.add.image(x + 4, y - 6, claveLapiz).setOrigin(0.15, 0.85).setScale(1 / R).setDepth(profundidad + 0.1);
+      // Va y viene sobre la hoja, como escribiendo renglones (quieto si la persona pidió menos movimiento).
+      if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        this.tweens.add({ targets: lapiz, x: x + 11, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.inOut' });
+        this.tweens.add({ targets: lapiz, angle: { from: -6, to: 6 }, duration: 210, yoyo: true, repeat: -1 });
+      }
+      this.escritura = [libro, lapiz];
+    });
+  }
+
+  private irALocal({ barrio, lote }: { barrio: Barrio; lote: number }): void {
+    if (barrio === this.barrio) this.irALote(lote);
+    else this.viajar(barrio, lote);
   }
 
   update(tiempo: number, delta: number): void {
@@ -493,7 +547,7 @@ export class Villa extends Phaser.Scene {
 
   private firmaDe(lote: number): string {
     const l = this.locales.get(lote);
-    if (l) return JSON.stringify([l.busquedaId ?? null, l.nombre, l.color, l.aparienciaCasa ?? null, l.aparienciaDueno ?? null, l.avatarDueno]);
+    if (l) return JSON.stringify([l.busquedaId ?? null, l.nombre, l.presupuesto ?? null, l.color, l.aparienciaCasa ?? null, l.aparienciaDueno ?? null, l.avatarDueno]);
     return lote === this.loteLibre ? 'libre' : 'vacio';
   }
 
@@ -505,7 +559,7 @@ export class Villa extends Phaser.Scene {
     const guardada = this.registry.get('apariencia') as AparienciaPersona | null | undefined;
     if (guardada) return guardada;
     const avatar = this.registry.get('avatar') as number | undefined;
-    return aparienciaDeAvatar(avatar ?? 85);
+    return aparienciaDeAvatar(avatar ?? AVATAR_INVITADO);
   }
 
   // ---------------------------------------------------------------
@@ -696,14 +750,19 @@ export class Villa extends Phaser.Scene {
       });
       casa.objetos.push(
         texto(this, p.x + 75, p.y + 90, 'Lote disponible', { tamano: 12, peso: 700, color: '#3b2a25' }, R * 1.5).setDepth(2),
-        texto(this, p.x + 75, p.y + 108, this.modo === 'trabajar' ? 'Publica lo que necesitas' : 'Abre tu local aquí', { tamano: 11, peso: 600, color: '#7a6a5f' }, R * 1.5).setDepth(2),
+        // Cada modo ofrece lo de su rol: quien trabaja abre su local; quien contrata publica lo que necesita.
+        texto(this, p.x + 75, p.y + 108, this.modo === 'trabajar' ? 'Abre tu local' : 'Publica lo que necesitas', { tamano: 11, peso: 600, color: '#7a6a5f' }, R * 1.5).setDepth(2),
       );
       return;
     }
 
+    const seBusca = !!local.busquedaId;
+    if (seBusca) {
+      this.dibujarCartelSeBusca(lote, p, local, casa, vigente);
+      return;
+    }
     casa.objetos.push(this.solido(p.x + 4, p.y + 8, ANCHO_CASA - 8, ALTO_CASA - 14));
     const aparienciaCasa = normalizarAparienciaCasa(this.barrio, local.aparienciaCasa);
-    const seBusca = !!local.busquedaId;
     const claveCasa = `casa:${this.barrio}:${seBusca ? 'se-busca:' : ''}${hashTexto(JSON.stringify([local.color, aparienciaCasa]))}@${R}`;
     casa.texturas.push(claveCasa);
     usarTextura(claveCasa);
@@ -724,6 +783,36 @@ export class Villa extends Phaser.Scene {
     void this.texturaPersona(claveDueno, dueno).then((ok) => {
       if (!ok || !vigente()) return;
       const sprite = this.add.image(p.x + 110, fondo + 1, claveDueno).setOrigin(0.5, 1).setScale(1 / R).setDepth(fondo + 1);
+      this.tweens.add({ targets: sprite, y: sprite.y - 1.5, duration: 700 + (lote % 7) * 53, yoyo: true, repeat: -1 });
+      casa.objetos.push(sprite);
+    });
+  }
+
+  /** El cartel de aviso de un «Se busca», con su autor parado al lado. */
+  private dibujarCartelSeBusca(
+    lote: number,
+    p: { x: number; y: number },
+    sb: CasaDeVilla,
+    casa: { objetos: Phaser.GameObjects.GameObject[]; texturas: string[] },
+    vigente: () => boolean,
+  ): void {
+    const fondo = p.y + ALTO_CASA;
+    const R = this.resolucion;
+    // Solo el tablero y los postes estorban el paso: el frente queda libre para acercarse a leer.
+    casa.objetos.push(this.solido(p.x + 8, p.y + 10, ANCHO_CASA - 16, 122));
+    const clave = `cartel-se-busca:${this.barrio}:${hashTexto(JSON.stringify([sb.nombre, sb.presupuesto ?? null]))}@${R}`;
+    casa.texturas.push(clave);
+    usarTextura(clave);
+    void asegurarTextura(this, clave, (t) => crearCartelSeBusca({ barrio: this.barrio, titulo: sb.nombre, presupuesto: sb.presupuesto }, { tamano: t }), ANCHO_CASA, ALTO_CASA, R).then((ok) => {
+      if (ok && vigente()) casa.objetos.push(this.add.image(p.x, p.y, clave).setOrigin(0).setScale(1 / R).setDepth(fondo - 1));
+    });
+    const autor = aparienciaDeUsuario({ avatar: sb.avatarDueno, apariencia: sb.aparienciaDueno });
+    const claveAutor = this.clavePersona(autor);
+    casa.texturas.push(claveAutor);
+    usarTextura(claveAutor);
+    void this.texturaPersona(claveAutor, autor).then((ok) => {
+      if (!ok || !vigente()) return;
+      const sprite = this.add.image(p.x + 136, fondo + 1, claveAutor).setOrigin(0.5, 1).setScale(1 / R).setDepth(fondo + 1);
       this.tweens.add({ targets: sprite, y: sprite.y - 1.5, duration: 700 + (lote % 7) * 53, yoyo: true, repeat: -1 });
       casa.objetos.push(sprite);
     });

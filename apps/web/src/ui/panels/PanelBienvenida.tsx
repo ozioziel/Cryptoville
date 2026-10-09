@@ -4,6 +4,7 @@ import { useSesion } from '../../features/auth/sesion';
 import { CanceladoPorUsuario } from '../../features/auth/wallet';
 import { mensajeDeError } from '../../lib/api';
 import { obtenerConfig, servicios } from '../../lib/config';
+import { esCelular } from '../../lib/dispositivo';
 import { useEstado } from '../estado';
 import { Aviso, Garantia } from '../components/basicos';
 import { LogoIcono } from '../components/Iconos';
@@ -40,17 +41,22 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
   };
 
   const esperandoCodigo = pasoCorreo.paso === 'codigo' || pasoCorreo.paso === 'verificando';
+  // En el celular, lo primero que se ve es cómo entrar; la explicación va debajo.
+  const [celular] = useState(esCelular);
+  const hayWalletConnect = Boolean(servicios().walletconnect_project_id);
 
-  return (
-    <div className="pila">
-      <div className="bienvenida-cabecera">
-        <LogoIcono tamano={88} />
-        <p className="destacado">
-          Un pueblo donde las personas ofrecen sus servicios, los encuentran y se pagan <strong>en garantía</strong> con Stellar.
-        </p>
-      </div>
+  const explicacion = (
+    <>
       <ol className="lista-pasos">
-        <li>Camina por las villas (flechas o WASD; en el celular, el joystick) y entra a los locales con <kbd>E</kbd>.</li>
+        <li>
+          {celular ? (
+            <>Camina por las villas con el joystick y entra a los locales con el botón «Entrar».</>
+          ) : (
+            <>
+              Camina por las villas con las flechas o WASD y entra a los locales con <kbd>E</kbd>.
+            </>
+          )}
+        </li>
         <li>Pide un servicio. Cuando el proveedor acepta, eliges cómo pagar: directo, con garantía o por etapas.</li>
         <li>Con garantía, el contrato guarda el dinero hasta que confirmas la entrega. Si hay un problema, decide el árbitro.</li>
       </ol>
@@ -60,6 +66,26 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
           Estás en <strong>testnet</strong>: el dinero es de prueba (USDC de prueba), no tiene valor real.
         </Aviso>
       )}
+    </>
+  );
+
+  const textoWallet = celular
+    ? hayWalletConnect
+      ? 'En el celular se entra con la app de tu wallet (Freighter, LOBSTR y otras) por WalletConnect: solo firmas un mensaje para demostrar que es tuya, no mueve dinero.'
+      : 'En el celular todavía no se puede conectar una wallet en este servidor (falta WalletConnect). Entra desde una computadora con Freighter, o mira el pueblo.'
+    : `Con tu wallet solo firmas un mensaje para demostrar que es tuya: no mueve dinero ni autoriza pagos. Funciona con Freighter, xBull, LOBSTR${
+        hayWalletConnect ? ' (también desde el celular, con el QR de WalletConnect)' : ''
+      } y otras.`;
+
+  return (
+    <div className="pila">
+      <div className="bienvenida-cabecera">
+        <LogoIcono tamano={88} />
+        <p className="destacado">
+          Un pueblo donde las personas ofrecen sus servicios, los encuentran y se pagan <strong>en garantía</strong> con Stellar.
+        </p>
+      </div>
+      {!celular && explicacion}
       {usuario ? (
         <button type="button" className="boton boton-primario" onClick={onListo}>
           Explorar el pueblo
@@ -167,10 +193,7 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
           >
             {ocupado && conWallet ? 'Esperando a tu wallet…' : hayCorreo ? '¿Ya usas Web3? Conecta tu wallet' : 'Conectar mi wallet'}
           </button>
-          <p className="tenue pequeno">
-            Con tu wallet solo firmas un mensaje para demostrar que es tuya: no mueve dinero ni autoriza pagos. Funciona con Freighter, xBull,
-            LOBSTR{servicios().walletconnect_project_id ? ' (también desde el celular, con el QR de WalletConnect)' : ''} y otras.
-          </p>
+          <p className="tenue pequeno">{textoWallet}</p>
           <button type="button" className="boton" onClick={onListo}>
             Solo mirar el pueblo
           </button>
@@ -197,6 +220,7 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
         </>
       )}
       {error && <Aviso tipo="peligro">{error}</Aviso>}
+      {celular && explicacion}
       <button type="button" className="enlace" onClick={() => abrir({ tipo: 'comentarios' })}>
         Enviar comentarios
       </button>
