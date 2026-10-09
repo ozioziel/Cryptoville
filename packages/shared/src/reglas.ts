@@ -79,6 +79,7 @@ export interface Reglas {
   };
   portafolio: {
     maxProyectos: number;
+    /** @deprecated Se usa `cv.maxPorSeccion` (cada sección del CV cuenta aparte). */
     maxExperiencias: number;
     maxMediosPorProyecto: number;
     /** Proyectos destacados: se cuelgan como cuadros en la pared del interior de los locales. */
@@ -87,6 +88,21 @@ export interface Reglas {
     maxEnPropuesta: number;
     /** Dominios de video que se pueden ver dentro de Cryptoville (además de Mux). */
     dominiosVideo: readonly string[];
+  };
+  trabajos: {
+    /** Trabajos terminados que una persona puede mostrar en su perfil público («Trabajos verificados»). */
+    maxPublicos: number;
+  };
+  cv: {
+    /** «Acerca de mí». */
+    largoAcercaDe: number;
+    maxHabilidades: number;
+    largoHabilidad: number;
+    maxIdiomas: number;
+    /** El CV en PDF (bucket público `cvs`). */
+    pdfMaxBytes: number;
+    /** Elementos por sección (experiencia, educación, certificaciones, premios y voluntariado). */
+    maxPorSeccion: number;
   };
   kyc: {
     /** Para qué se exige el KYC aprobado. Si el KYC está apagado en el servidor, no se exige nada. */
@@ -131,6 +147,8 @@ const BASE: Reglas = {
     maxEnPropuesta: 5,
     dominiosVideo: ['youtube.com', 'www.youtube.com', 'youtu.be', 'vimeo.com', 'player.vimeo.com'],
   },
+  trabajos: { maxPublicos: 6 },
+  cv: { largoAcercaDe: 2000, maxHabilidades: 30, largoHabilidad: 40, maxIdiomas: 10, pdfMaxBytes: 5 * MB, maxPorSeccion: 20 },
   kyc: { exigidoPara: ['abrir_local', 'cobrar', 'resenar'] },
 };
 

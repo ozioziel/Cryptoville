@@ -13,3 +13,6 @@ export * from './pagos.js';
 export * from './stellar/contrato-v2.js';
 export * from './portafolio.js';
 export * from './rampas.js';
+export * from './trabajos.js';
+export * from './plaza.js';
+export * from './cv.js';

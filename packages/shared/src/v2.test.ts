@@ -170,3 +170,40 @@ describe('rampa simulada', () => {
     expect(qrRampaSimulada('CV-ABC123', '70.30')).toMatch(/^SIMULADO-CRYPTOVILLE\|/);
   });
 });
+
+describe('mejoras de la plaza: trabajos, lugares y CV', () => {
+  it('«Mis trabajos»: terminados y los que se pueden mostrar en público', async () => {
+    const { esTrabajoTerminado, esTrabajoPublicable } = await import('./index.js');
+    expect(['liberado', 'resuelto', 'finalizado'].every((e) => esTrabajoTerminado(e as never))).toBe(true);
+    expect(esTrabajoTerminado('pagado')).toBe(false);
+    // Una disputa resuelta no se muestra como «pagado y terminado».
+    expect(esTrabajoPublicable('resuelto')).toBe(false);
+    expect(esTrabajoPublicable('liberado') && esTrabajoPublicable('finalizado')).toBe(true);
+    expect(REGLAS.testnet.trabajos.maxPublicos).toBe(6);
+  });
+
+  it('la Plaza principal es un lugar más (primero en el selector), sin ser una villa', async () => {
+    const { LISTA_LUGARES, esLugar, esBarrio, nombreLugar, tituloLugar } = await import('./index.js');
+    expect(LISTA_LUGARES[0]).toBe('plaza');
+    expect(esLugar('plaza') && esLugar('tech')).toBe(true);
+    expect(esLugar('otra')).toBe(false);
+    expect(esBarrio('plaza')).toBe(false);
+    expect(nombreSector(nombreLugar('plaza'), 2)).toBe('Plaza B');
+    expect(tituloLugar('plaza')).toBe('Plaza principal');
+    expect(tituloLugar('creativo')).toBe('Villa Creativo');
+  });
+
+  it('el CV: secciones, topes y cuándo ya está armado', async () => {
+    const { SECCIONES_CV, TIPOS_EXPERIENCIA, cvArmado } = await import('./index.js');
+    expect(TIPOS_EXPERIENCIA).toEqual(['trabajo', 'educacion', 'certificacion', 'premio', 'voluntariado']);
+    expect(SECCIONES_CV.premio.conFin).toBe(false);
+    expect(SECCIONES_CV.certificacion.enlace).toBeTruthy();
+    expect(REGLAS.testnet.cv).toMatchObject({ maxHabilidades: 30, maxIdiomas: 10, pdfMaxBytes: 5 * 1024 * 1024 });
+    const vacio = { acerca_de: null, habilidades: [], idiomas: [], pdf_ruta: null };
+    expect(cvArmado(null)).toBe(false);
+    expect(cvArmado(vacio)).toBe(false);
+    expect(cvArmado({ ...vacio, acerca_de: '   ' })).toBe(false);
+    expect(cvArmado({ ...vacio, habilidades: ['Figma'] })).toBe(true);
+    expect(cvArmado(vacio, 1)).toBe(true);
+  });
+});
