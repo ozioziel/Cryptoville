@@ -13,7 +13,7 @@ import {
   crearCuadro,
   crearInterior,
 } from '../../arte/casa';
-import { crearPersona } from '../../arte/persona';
+import { asegurarPersona } from '../animacionPersona';
 import { hashTexto } from '../../arte/svg';
 import { emitir, escuchar, type CuadroInterior, type DatosInterior } from '../EventBus';
 import { ALTO_JUGADOR, ANCHO_JUGADOR } from '../objects/Jugador';
@@ -68,7 +68,7 @@ export class Interior extends Phaser.Scene {
     const claveCuarto = `interior:${barrio}:${hashTexto(JSON.stringify([color, casa]))}@${R}`;
     const dueno = aparienciaDeUsuario({ avatar: datos.avatarDueno, apariencia: datos.aparienciaDueno });
     const jugador = datos.aparienciaJugador ?? aparienciaDeAvatar(datos.avatarJugador ?? 85);
-    const persona = (a: AparienciaPersona) => `persona:${hashTexto(JSON.stringify(a))}@${R}`;
+    const persona = (a: AparienciaPersona) => `persona-perfiles:${hashTexto(JSON.stringify(a))}@${R}`;
     const claveDueno = persona(dueno);
     const claveJugador = persona(jugador);
     this.texturas = [claveCuarto, claveDueno, claveJugador];
@@ -116,12 +116,12 @@ export class Interior extends Phaser.Scene {
       });
     };
     const quitarCuadros = escuchar('cuadros-interior', colgar);
-    void asegurarTextura(this, claveDueno, (t) => crearPersona(dueno, { tamano: t }), ANCHO_JUGADOR, ALTO_JUGADOR, R).then((ok) => {
+    void asegurarPersona(this, claveDueno, dueno, ANCHO_JUGADOR, ALTO_JUGADOR, R).then((ok) => {
       if (!ok || !activa()) return;
       const sprite = this.add.image(DUENO_INTERIOR.x, DUENO_INTERIOR.y, claveDueno).setOrigin(0.5, 1).setScale(1 / R).setDepth(DUENO_INTERIOR.y);
       this.tweens.add({ targets: sprite, y: sprite.y - 1.5, duration: 600, yoyo: true, repeat: -1 });
     });
-    void asegurarTextura(this, claveJugador, (t) => crearPersona(jugador, { tamano: t }), ANCHO_JUGADOR, ALTO_JUGADOR, R).then((ok) => {
+    void asegurarPersona(this, claveJugador, jugador, ANCHO_JUGADOR, ALTO_JUGADOR, R).then((ok) => {
       if (ok && activa()) this.add.image(JUGADOR_INTERIOR.x, JUGADOR_INTERIOR.y, claveJugador).setOrigin(0.5, 1).setScale(1 / R).setDepth(JUGADOR_INTERIOR.y);
     });
 
