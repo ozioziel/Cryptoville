@@ -3,7 +3,7 @@ version: 2026-10-07
 ---
 # Política de privacidad
 
-Aquí contamos qué datos tuyos guarda Cryptoville, para qué y por cuánto tiempo.
+Aquí contamos qué datos tuyos guarda WorkVille, para qué y por cuánto tiempo.
 
 > [!ABOGADO] Falta indicar quién es el responsable de los datos (razón social y contacto), la ley de protección de datos que aplica y la autoridad ante la que se puede reclamar.
 
@@ -19,14 +19,14 @@ Aquí contamos qué datos tuyos guarda Cryptoville, para qué y por cuánto tiem
 ## 2. KYC (verificación de identidad)
 
 - La verificación la hace un proveedor externo (Didit). Tú le muestras tu documento y tu cara a ese proveedor.
-- Cryptoville **no guarda** las fotos de tu documento ni tu número de documento.
-- Cryptoville guarda solo el resultado (aprobado o no), la fecha y una **huella** (un código que no se puede revertir) para detectar si esa persona ya tiene otra cuenta.
+- WorkVille **no guarda** las fotos de tu documento ni tu número de documento.
+- WorkVille guarda solo el resultado (aprobado o no), la fecha y una **huella** (un código que no se puede revertir) para detectar si esa persona ya tiene otra cuenta.
 
 > [!ABOGADO] Revisar el consentimiento para datos biométricos, la transferencia internacional de datos al proveedor de KYC y el plazo de conservación de la huella.
 
 ## 3. Lo que es público en la red de Stellar
 
-Los pagos y los contratos son públicos en la red de Stellar: cualquiera puede ver las direcciones y los montos. Cryptoville no puede borrar nada de la red.
+Los pagos y los contratos son públicos en la red de Stellar: cualquiera puede ver las direcciones y los montos. WorkVille no puede borrar nada de la red.
 
 ## 4. En tu navegador
 

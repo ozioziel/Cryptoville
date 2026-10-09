@@ -1,4 +1,4 @@
-// Service worker de Cryptoville: solo muestra las notificaciones del navegador (Web Push).
+// Service worker de WorkVille: solo muestra las notificaciones del navegador (Web Push).
 // No guarda nada en caché. Al tocar una notificación se abre (o se enfoca) la app en el pedido o «Se busca».
 self.addEventListener('push', (evento) => {
   let datos = {};
@@ -8,10 +8,10 @@ self.addEventListener('push', (evento) => {
     datos = { texto: evento.data ? evento.data.text() : '' };
   }
   evento.waitUntil(
-    self.registration.showNotification(datos.titulo || 'Cryptoville', {
+    self.registration.showNotification(datos.titulo || 'WorkVille', {
       body: datos.texto || 'Tienes un aviso nuevo',
-      icon: '/favicon.png',
-      badge: '/favicon.png',
+      icon: '/assets/brand/workville-logo-cropped.png',
+      badge: '/assets/brand/workville-logo-cropped.png',
       data: { url: datos.url || '/' },
     }),
   );

@@ -50,7 +50,7 @@ interface Sesion {
   recargar(): Promise<void>;
   /** Wallet que va a firmar la próxima transacción (si hace falta, pide conectarla). */
   walletParaFirmar(): Promise<string>;
-  /** Firma con la wallet de la sesión una transacción armada por Cryptoville. */
+  /** Firma con la wallet de la sesión una transacción armada por WorkVille. */
   firmarTransaccion(xdr: string, direccion: string): Promise<string>;
   /** Suma otra wallet a la cuenta: se elige en el selector y firma un mensaje. */
   vincularWallet(): Promise<void>;

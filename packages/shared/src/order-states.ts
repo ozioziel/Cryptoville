@@ -76,7 +76,7 @@ export const ACCIONES: Record<AccionPedido, DefinicionAccion> = {
     hacia: 'en_disputa',
     actor: 'participante',
     enCadena: true,
-    ayuda: 'El dinero queda congelado hasta que el equipo de Cryptoville decida.',
+    ayuda: 'El dinero queda congelado hasta que el equipo de WorkVille decida.',
   },
   resolver: {
     accion: 'resolver',

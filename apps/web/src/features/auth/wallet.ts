@@ -1,5 +1,5 @@
 // Conexión con wallets de Stellar mediante Stellar Wallets Kit.
-// - Firma el mensaje para iniciar sesión (SEP-53) y las transacciones que arma Cryptoville.
+// - Firma el mensaje para iniciar sesión (SEP-53) y las transacciones que arma WorkVille.
 // - Si el servidor tiene WALLETCONNECT_PROJECT_ID, suma la opción WalletConnect: aparece un QR
 //   y la persona firma con la wallet de su celular (LOBSTR, Freighter Mobile…).
 import { StellarWalletsKit } from '@creit.tech/stellar-wallets-kit/sdk';
@@ -48,10 +48,10 @@ function iniciar(red: RedStellar, walletConnectId?: string | null): Promise<void
           new WalletConnectModule({
             projectId: walletConnectId,
             metadata: {
-              name: 'Cryptoville',
+              name: 'WorkVille',
               description: 'Un pueblo de servicios con pago en garantía en Stellar',
               url: location.origin,
-              icons: [`${location.origin}/favicon.png`],
+              icons: [`${location.origin}/assets/brand/workville-logo-cropped.png`],
             },
             allowedChains: [red === 'mainnet' ? WalletConnectTargetChain.PUBLIC : WalletConnectTargetChain.TESTNET],
           }),
@@ -88,7 +88,7 @@ export async function conectarWallet(red: RedStellar, walletConnectId?: string |
   }
 }
 
-/** Avisa si la wallet está en otra red (por ejemplo, en mainnet cuando Cryptoville está en testnet). */
+/** Avisa si la wallet está en otra red (por ejemplo, en mainnet cuando WorkVille está en testnet). */
 export async function revisarRedDeLaWallet(red: RedStellar): Promise<void> {
   let passphrase: string | null = null;
   try {
@@ -116,7 +116,7 @@ export async function firmarConWallet(mensaje: string, direccion: string, red: R
   }
 }
 
-/** Pide a la wallet que firme una transacción armada por Cryptoville. Devuelve el XDR firmado. */
+/** Pide a la wallet que firme una transacción armada por WorkVille. Devuelve el XDR firmado. */
 export async function firmarTransaccionConWallet(xdr: string, direccion: string, red: RedStellar, walletConnectId?: string | null): Promise<string> {
   await iniciar(red, walletConnectId);
   await revisarRedDeLaWallet(red);

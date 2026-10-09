@@ -19,7 +19,7 @@ describe('firma local (modo desarrollo)', () => {
     const par = Keypair.random();
     const firmante = await firmanteDesdeSecreta(par.secret());
     expect(firmante.direccion).toBe(par.publicKey());
-    const mensaje = 'Cryptoville: iniciar sesión\nCódigo: abc';
+    const mensaje = 'WorkVille: iniciar sesión\nCódigo: abc';
     const firma = Buffer.from(await firmante.firmar(mensaje), 'base64');
     expect(par.verify(Buffer.from(hashSep53(mensaje)), firma)).toBe(true);
   });

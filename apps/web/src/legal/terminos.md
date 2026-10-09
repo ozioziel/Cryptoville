@@ -3,15 +3,15 @@ version: 2026-10-07
 ---
 # Términos y condiciones
 
-Estos términos explican cómo funciona Cryptoville y qué puedes esperar de nosotros. Al usar la app aceptas estas reglas.
+Estos términos explican cómo funciona WorkVille y qué puedes esperar de nosotros. Al usar la app aceptas estas reglas.
 
 > [!ABOGADO] Falta indicar la razón social, el domicilio legal y el país cuyas leyes rigen estos términos, y el tribunal competente en caso de conflicto.
 
-## 1. Qué es Cryptoville
+## 1. Qué es WorkVille
 
-- Cryptoville es una plataforma donde las personas ofrecen servicios («Quiero contratar») y publican lo que necesitan («Quiero trabajar»).
-- Los pagos se hacen en la red de Stellar ({{red}}). Cryptoville no es un banco ni guarda tu dinero: el dinero en garantía lo guarda un contrato inteligente que solo puede pagarle al proveedor o devolverle al cliente.
-- Cryptoville no presta los servicios publicados: los prestan las personas que los ofrecen.
+- WorkVille es una plataforma donde las personas ofrecen servicios («Quiero contratar») y publican lo que necesitan («Quiero trabajar»).
+- Los pagos se hacen en la red de Stellar ({{red}}). WorkVille no es un banco ni guarda tu dinero: el dinero en garantía lo guarda un contrato inteligente que solo puede pagarle al proveedor o devolverle al cliente.
+- WorkVille no presta los servicios publicados: los prestan las personas que los ofrecen.
 
 > [!ABOGADO] Revisar si la actividad requiere registro o licencia en el país (por ejemplo, como proveedor de servicios de activos virtuales) y cómo se describe la custodia del contrato.
 
@@ -19,8 +19,8 @@ Estos términos explican cómo funciona Cryptoville y qué puedes esperar de nos
 
 - Entras con tu wallet o con tu correo. La cuenta es la persona: puedes sumar varias wallets, pero no crear varias cuentas.
 - Para abrir un local, cobrar y dejar reseñas tienes que verificar tu identidad (KYC), si el servidor lo tiene encendido.
-- Eres responsable de tus llaves y de tu wallet. Si pierdes tu llave, Cryptoville no puede recuperarla.
-- Si entras con tu correo, tu wallet la guarda el proveedor de cuentas (Pollar). Cryptoville nunca tiene tus llaves.
+- Eres responsable de tus llaves y de tu wallet. Si pierdes tu llave, WorkVille no puede recuperarla.
+- Si entras con tu correo, tu wallet la guarda el proveedor de cuentas (Pollar). WorkVille nunca tiene tus llaves.
 
 > [!ABOGADO] Definir la edad mínima para usar la app y qué pasa con la cuenta si se infringen estos términos (suspensión, cierre, aviso previo).
 
@@ -41,8 +41,8 @@ Estos términos explican cómo funciona Cryptoville y qué puedes esperar de nos
 
 ## 5. Responsabilidad
 
-- Cryptoville resuelve las disputas de los pagos con garantía según sus reglas publicadas.
-- Cryptoville no responde por la calidad de los servicios ni por los pagos directos, que no tienen garantía.
+- WorkVille resuelve las disputas de los pagos con garantía según sus reglas publicadas.
+- WorkVille no responde por la calidad de los servicios ni por los pagos directos, que no tienen garantía.
 - El contrato inteligente puede tener errores: antes de pasar a mainnet se audita.
 
 > [!ABOGADO] Redactar la limitación de responsabilidad según la ley aplicable (lo que no se puede excluir por ley, por ejemplo frente a consumidores).

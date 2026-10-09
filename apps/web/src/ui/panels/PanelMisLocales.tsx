@@ -146,7 +146,7 @@ function PagoLocalExtra({ cupo, onPagado }: { cupo: Cupo; onPagado: () => Promis
       <strong>Abrir otro local</strong>
       <p className="pequeno">
         Ya usaste tus {cupo.gratis} locales gratis. Cada local extra cuesta <b>{cupo.precio_extra_usdc} USDC</b>, una sola vez, y el pago va a la
-        tesorería de Cryptoville.
+        tesorería de WorkVille.
       </p>
       <FirmarEnApp tipo="pago_local" etiqueta="Pago del local extra" texto={`Pagar ${cupo.precio_extra_usdc} USDC con mi wallet`} onListo={() => void onPagado()} />
       <details>

@@ -95,7 +95,7 @@ const id = (c: ContextoArgumentos): ArgumentoContrato => ({
   nombre: 'id',
   tipo: 'u64',
   valor: String(c.numero),
-  ayuda: 'Número del pedido en Cryptoville',
+  ayuda: 'Número del pedido en WorkVille',
 });
 
 /** Argumentos exactos que hay que escribir en Stellar Lab para cada acción. */

@@ -10,7 +10,7 @@ export class ErrorApi extends Error {
   }
 }
 
-/** Llama a la API de Cryptoville (escrituras). Agrega la sesión si existe. */
+/** Llama a la API de WorkVille (escrituras). Agrega la sesión si existe. */
 export async function api<T = unknown>(ruta: string, opciones: { metodo?: string; cuerpo?: unknown } = {}): Promise<T> {
   const { data } = await supabase().auth.getSession();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };

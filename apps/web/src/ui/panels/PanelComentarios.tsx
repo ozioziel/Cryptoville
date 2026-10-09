@@ -27,7 +27,7 @@ export function PanelComentarios() {
   if (!usuario) {
     return (
       <div className="pila">
-        <p>Para mandarnos un comentario, primero entra a Cryptoville (así podemos responderte).</p>
+        <p>Para mandarnos un comentario, primero entra a WorkVille (así podemos responderte).</p>
         <button type="button" className="boton boton-primario" onClick={() => abrir({ tipo: 'bienvenida' })}>
           Entrar
         </button>
@@ -62,7 +62,7 @@ export function PanelComentarios() {
 
   return (
     <div className="pila">
-      <p className="tenue">Cuéntanos qué mejorarías o qué falló. Lo lee el equipo de Cryptoville.</p>
+      <p className="tenue">Cuéntanos qué mejorarías o qué falló. Lo lee el equipo de WorkVille.</p>
       <Pestanas etiqueta="Tipo de comentario" opciones={TIPOS} valor={tipo} onCambiar={setTipo} />
       <textarea
         className="campo"

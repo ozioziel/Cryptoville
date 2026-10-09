@@ -12,7 +12,7 @@ version: 2026-10-07
 ## Qué no
 
 - Contenido ilegal, sexual, violento o que promueva el odio.
-- Estafas, pedidos de pagar por fuera de Cryptoville para saltarse la garantía, o datos personales de otras personas.
+- Estafas, pedidos de pagar por fuera de WorkVille para saltarse la garantía, o datos personales de otras personas.
 - Acoso, insultos o spam en los chats.
 - Hacerse pasar por otra persona.
 

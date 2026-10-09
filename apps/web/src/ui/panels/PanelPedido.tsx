@@ -136,7 +136,7 @@ export function PanelPedido({ id }: { id: string }) {
                     Explorador
                   </a>
                   {p.en_cadena ? (
-                    <span className="badge badge-exito" title="Cryptoville leyó la transacción en la red y coincide con el pedido">
+                    <span className="badge badge-exito" title="WorkVille leyó la transacción en la red y coincide con el pedido">
                       Verificada en la red
                     </span>
                   ) : p.verificado_por ? (

@@ -1,4 +1,4 @@
-// Pruebas de la lógica de Cryptoville v2 en la web (sin navegador).
+// Pruebas de la lógica de WorkVille v2 en la web (sin navegador).
 import { DOCUMENTOS_LEGALES, PASSPHRASE, REGLAS, nombreSector, porcentajeBps, sectorDeLote, loteEnSector } from '@cryptoville/shared';
 import { Account, BASE_FEE, Keypair, Operation, TransactionBuilder } from '@stellar/stellar-sdk';
 import { describe, expect, it } from 'vitest';

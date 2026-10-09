@@ -22,7 +22,7 @@ const TRAZOS = {
   maletin: <><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M9 7V5.5C9 4.7 9.7 4 10.5 4H13.5C14.3 4 15 4.7 15 5.5V7M3 12.5H21" /></>,
   chincheta: <path d="M9 3H15L14 9L17 12V14H7V12L10 9ZM12 14V21" />,
   foco: <path d="M9 18H15M10 21H14M12 3C8.7 3 6.5 5.6 6.5 8.5C6.5 10.6 7.6 12 8.6 13C9.2 13.6 9.5 14.4 9.5 15.2V15.5H14.5V15.2C14.5 14.4 14.8 13.6 15.4 13C16.4 12 17.5 10.6 17.5 8.5C17.5 5.6 15.3 3 12 3Z" />,
-  // Cryptoville v2: métodos de pago, pruebas, QR y personas.
+  // WorkVille v2: métodos de pago, pruebas, QR y personas.
   rayo: <path d="M13 3L5 13H11L10 21L19 10H13Z" />,
   fases: <><circle cx="5" cy="12" r="2.2" /><circle cx="12" cy="12" r="2.2" /><circle cx="19" cy="12" r="2.2" /><path d="M7.2 12H9.8M14.2 12H16.8" /></>,
   alerta: <><path d="M12 4L21 19H3Z" /><path d="M12 10V14M12 17V17.2" /></>,
@@ -63,13 +63,17 @@ export function Icono({ nombre, tamano = 18, color, etiqueta }: { nombre: Nombre
   );
 }
 
-/** Logo: ícono de casa sobre un cuadrado coral. */
-export function LogoIcono({ tamano = 24 }: { tamano?: number }) {
+/** Identidad de WorkVille, compartida por la navegación y la bienvenida. */
+export function LogoIcono({ tamano = 36 }: { tamano?: number }) {
   return (
-    <svg width={tamano} height={tamano} viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect width="24" height="24" rx="7" fill="#e07a5f" />
-      <path d="M6 12L12 7L18 12V18H6Z" fill="#fdf6e3" />
-      <circle cx="12" cy="14" r="2.2" fill="#e07a5f" />
-    </svg>
+    <img
+      className="marca-logo"
+      src="/assets/brand/workville-logo-cropped.png"
+      width={tamano}
+      height={tamano}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+    />
   );
 }

@@ -9,7 +9,7 @@ import { Aviso, Garantia } from '../components/basicos';
 import { LogoIcono } from '../components/Iconos';
 import { EnlacesLegales } from './PanelLegal';
 
-/** Qué es Cryptoville y cómo entrar: con el correo (para quien no conoce cripto) o con una wallet. */
+/** Qué es WorkVille y cómo entrar: con el correo (para quien no conoce cripto) o con una wallet. */
 export function PanelBienvenida({ onListo }: { onListo: () => void }) {
   const { usuario, entrarConWallet, entrarConGoogle, entrarConSecreta, pedirCodigo, confirmarCodigo, pasoCorreo } = useSesion();
   const { abrir } = useEstado();
@@ -44,7 +44,7 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
   return (
     <div className="pila">
       <div className="bienvenida-cabecera">
-        <LogoIcono tamano={44} />
+        <LogoIcono tamano={88} />
         <p className="destacado">
           Un pueblo donde las personas ofrecen sus servicios, los encuentran y se pagan <strong>en garantía</strong> con Stellar.
         </p>
@@ -89,7 +89,7 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
               )}
               <p className="tenue pequeno">
                 Te creamos una cuenta con su propia wallet de Stellar. No tienes que anotar ninguna clave: la guarda nuestro proveedor de cuentas
-                (Pollar), nunca Cryptoville.
+                (Pollar), nunca WorkVille.
               </p>
             </>
           )}
@@ -126,7 +126,7 @@ export function PanelBienvenida({ onListo }: { onListo: () => void }) {
                   <p className="tenue pequeno">
                     {hayGoogle
                       ? 'Te mandamos un código de un solo uso a tu correo.'
-                      : 'Te creamos una cuenta con su propia wallet de Stellar. No tienes que anotar ninguna clave: la guarda nuestro proveedor de cuentas (Pollar), nunca Cryptoville.'}
+                      : 'Te creamos una cuenta con su propia wallet de Stellar. No tienes que anotar ninguna clave: la guarda nuestro proveedor de cuentas (Pollar), nunca WorkVille.'}
                   </p>
                 </form>
               ) : (

@@ -52,7 +52,7 @@ export function PanelServicio({ servicioId }: { servicioId: string }) {
       <p className="precio precio-grande">{servicio.precio_usdc} USDC</p>
       <p>{servicio.descripcion}</p>
       <p className="tenue pequeno">
-        Entrega en {servicio.dias_entrega} días. El proveedor recibe {servicio.precio_usdc} USDC menos la comisión de Cryptoville (
+        Entrega en {servicio.dias_entrega} días. El proveedor recibe {servicio.precio_usdc} USDC menos la comisión de WorkVille (
         {porcentajeBps(bps)} ≈ {comision} USDC)
         {metodo === 'directo' ? ' en el momento del pago.' : metodo === 'etapas' ? ' en partes, al aprobar cada fase.' : ' cuando liberes el pago.'}
       </p>
