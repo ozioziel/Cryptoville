@@ -16,6 +16,7 @@ export function Panel({
   completo = false,
   onAlternarCompleto,
   lateral,
+  clase,
   children,
 }: {
   titulo: ReactNode;
@@ -26,6 +27,8 @@ export function Panel({
   completo?: boolean;
   onAlternarCompleto?: () => void;
   lateral?: ReactNode;
+  /** Clase extra (por ejemplo, el aspecto de tablón de afiches del buscador). */
+  clase?: string;
   children: ReactNode;
 }) {
   const ref = useRef<HTMLElement>(null);
@@ -73,7 +76,7 @@ export function Panel({
 
   return (
     <aside
-      className={`panel ${amplio ? 'panel-amplio' : ''} ${completo ? 'panel-completo' : ''} ${portada ? 'con-portada' : ''}`}
+      className={`panel ${amplio ? 'panel-amplio' : ''} ${completo ? 'panel-completo' : ''} ${portada ? 'con-portada' : ''} ${clase ?? ''}`}
       ref={ref}
       tabIndex={-1}
       role="dialog"

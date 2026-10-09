@@ -42,7 +42,7 @@ export function BotonEliminarLocal({ local, onEliminado }: { local: Pick<Local, 
     const ultimo = mios.length === 1;
     const confirmado = window.confirm(
       `¿Eliminar «${local.nombre}»?\n\nDeja de verse en la villa y libera su lote. Sus servicios se desactivan y los pedidos terminados siguen en tu historial.` +
-        (ultimo ? '\n\nEs tu único local: después tendrás que abrir otro para ofrecer servicios.' : ''),
+        (ultimo ? '\n\nEs tu único local: también se va tu edificio de la Plaza principal, y para ofrecer servicios tendrás que abrir otro.' : ''),
     );
     if (!confirmado) return;
     setOcupado(true);

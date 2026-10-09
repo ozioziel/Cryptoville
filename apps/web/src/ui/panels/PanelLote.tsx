@@ -12,6 +12,7 @@ import { chipDe } from '../villas';
 import { Avatar, Direccion, Garantia, fechaCorta } from '../components/basicos';
 import { BotonBloquear, BotonReportar, Nombre, Verificado } from '../components/Confianza';
 import { Icono } from '../components/Iconos';
+import { BotonesIr } from '../components/BotonesIr';
 
 /**
  * Lo que ves al entrar a una casa: el local con sus servicios (como en la muestra aprobada),
@@ -92,6 +93,10 @@ export function PanelLote({ lote, barrio }: { lote: number; barrio?: Barrio }) {
         </span>
         <span className="chip chip-verde">{rep?.nivel ?? 'Nuevo'}</span>
         {local.usuario.rol === 'arbitro' && <span className="chip chip-info">Equipo WorkVille</span>}
+      </div>
+      {/* Su CV está en la Plaza principal. */}
+      <div className="fila">
+        <BotonesIr local={local} soloEdificio />
       </div>
       {local.descripcion && <p>{local.descripcion}</p>}
 

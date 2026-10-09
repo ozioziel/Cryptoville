@@ -1,4 +1,14 @@
-import { ACCIONES, ETIQUETA_ACCION, enlaceExplorador, enlaceTransaccion, permiteResena, puedeVerificar, type DefinicionAccion, type Parte } from '@cryptoville/shared';
+import {
+  ACCIONES,
+  ETIQUETA_ACCION,
+  enlaceExplorador,
+  enlaceTransaccion,
+  esTrabajoPublicable,
+  permiteResena,
+  puedeVerificar,
+  type DefinicionAccion,
+  type Parte,
+} from '@cryptoville/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSesion } from '../../features/auth/sesion';
 import { FirmarEnApp } from '../../features/escrow/FirmarEnApp';
@@ -13,6 +23,7 @@ import { Icono } from '../components/Iconos';
 import { BotonReportar, Nombre } from '../components/Confianza';
 import { PedidoV2 } from '../pagos/PedidoV2';
 import { NOMBRE_METODO, type MetodoPago } from '@cryptoville/shared';
+import { BotonTrabajoPublico } from './PanelTrabajos';
 
 const ROL_TEXTO = { cliente: 'Eres el cliente', proveedor: 'Eres el proveedor', arbitro: 'Eres el árbitro' } as const;
 
@@ -171,6 +182,14 @@ export function PanelPedido({ id }: { id: string }) {
             )}
           </Aviso>
         </>
+      )}
+
+      {esTrabajoPublicable(pedido.estado) && rol !== 'arbitro' && (
+        <div className="caja pila-compacta">
+          <strong>¿Lo muestras en tu perfil?</strong>
+          <span className="tenue pequeno">Se ve como «Trabajo verificado»: el título, la fecha, las estrellas y la transacción. Nunca el monto ni el detalle.</span>
+          <BotonTrabajoPublico pedidoId={pedido.id} />
+        </div>
       )}
 
       {permiteResena(pedido.estado) && rol !== 'arbitro' && !yaResene && (

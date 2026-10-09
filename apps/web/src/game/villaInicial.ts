@@ -1,4 +1,4 @@
-import { esBarrio, type Barrio } from '@cryptoville/shared';
+import { esLugar, type Lugar } from '@cryptoville/shared';
 import type { ModoVilla } from './EventBus';
 
 const CLAVE = 'cryptoville-villa';
@@ -21,18 +21,18 @@ export function guardarModo(modo: ModoVilla): void {
   }
 }
 
-/** Villa donde se empieza: la última visitada (si se puede leer) o la Audiovisual. */
-export function villaGuardada(): Barrio {
+/** Villa (o la Plaza) donde se empieza: la última visitada (si se puede leer) o la Audiovisual. */
+export function villaGuardada(): Lugar {
   try {
     const v = localStorage.getItem(CLAVE);
-    if (esBarrio(v)) return v;
+    if (esLugar(v)) return v;
   } catch {
     // Sin almacenamiento local: se empieza en la villa por defecto.
   }
   return 'audiovisual';
 }
 
-export function guardarVilla(barrio: Barrio): void {
+export function guardarVilla(barrio: Lugar): void {
   try {
     localStorage.setItem(CLAVE, barrio);
   } catch {

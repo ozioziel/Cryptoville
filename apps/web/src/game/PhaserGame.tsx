@@ -1,4 +1,4 @@
-import { LISTA_BARRIOS } from '@cryptoville/shared';
+import { LISTA_LUGARES } from '@cryptoville/shared';
 import Phaser from 'phaser';
 import { useEffect, useRef } from 'react';
 import { Arranque } from './scenes/Arranque';
@@ -49,8 +49,8 @@ export function PhaserGame() {
         scale: { mode: Phaser.Scale.NONE, width: Math.round(ancho * d), height: Math.round(alto * d), zoom: 1 / d },
         physics: { default: 'arcade', arcade: { debug: false } },
         input: { activePointers: 2 },
-        // Cada villa es una escena aparte.
-        scene: [Arranque, ...LISTA_BARRIOS.map((b) => new Villa(b)), Interior],
+        // Cada villa (y la Plaza principal) es una escena aparte.
+        scene: [Arranque, ...LISTA_LUGARES.map((b) => new Villa(b)), Interior],
         callbacks: {
           preBoot: (g) => {
             g.registry.set('dpr', d);

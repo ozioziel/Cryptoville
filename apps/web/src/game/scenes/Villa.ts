@@ -1,9 +1,10 @@
 import {
   AVATAR_INVITADO,
-  BARRIOS,
+  LISTA_BARRIOS,
   aparienciaDeAvatar,
   aparienciaDeUsuario,
   loteEnSector,
+  nombreLugar,
   nombreSector,
   normalizarAparienciaCasa,
   primerLoteLibre,
@@ -11,11 +12,13 @@ import {
   sectorDeLote,
   type AparienciaPersona,
   type Barrio,
+  type Lugar,
   type RedStellar,
 } from '@cryptoville/shared';
 import Phaser from 'phaser';
 import { ALTO_CASA, ANCHO_CASA, COLOR_SE_BUSCA, LETRERO_CASA, colorTextoLetrero, crearCartelSeBusca, crearCasa } from '../../arte/casa';
 import { ALTO_LAPIZ, ALTO_LIBRO, ANCHO_LAPIZ, ANCHO_LIBRO, crearLapiz, crearLibroAbierto } from '../../arte/escribir';
+import { DUENO_EDIFICIO, crearEdificioPersona, letreroEdificio, pisosEdificio } from '../../arte/edificio';
 import { asegurarPersona } from '../animacionPersona';
 import { hashTexto, azar } from '../../arte/svg';
 import {
@@ -25,19 +28,24 @@ import {
   ANCHO_ARBOL,
   ANCHO_FAROL,
   ANCHO_LETRERO_SECTOR,
+  LADO_INSIGNIA,
+  PUERTA_TABLON,
+  TABLON,
   TEMAS,
   crearArbol,
   crearCalle,
   crearFarol,
+  crearInsignia,
   crearLetreroSector,
   crearLoteDisponible,
   crearMarca,
+  crearTablon,
   edificioCentral,
   estatua,
   type PiezaGrande,
   type TemaVilla,
 } from '../../arte/villa';
-import { emitir, escuchar, type LocalEnMapa, type ModoVilla, type PersonaEnLinea, type Puerta, type SeBuscaEnMapa } from '../EventBus';
+import { emitir, escuchar, type EdificioEnMapa, type LocalEnMapa, type ModoVilla, type PersonaEnLinea, type Puerta, type SeBuscaEnMapa } from '../EventBus';
 import { ALTO_JUGADOR, ANCHO_JUGADOR, Jugador } from '../objects/Jugador';
 import { PersonasEnVilla } from '../objects/Personas';
 import * as plano from '../plano';
@@ -52,8 +60,18 @@ const MARGEN_VISTA = 320;
 const MARGEN_SALIDA = 760;
 const DX = plano.DESPLAZAMIENTO_PLAZA;
 
-/** Lo que se dibuja en un lote: un local (modo contratar) o el cartel de un «Se busca» (modo trabajar). */
-type CasaDeVilla = LocalEnMapa & { busquedaId?: string; presupuesto?: string | null };
+/**
+ * Lo que se dibuja en un lote: un local (modo contratar), el cartel de un «Se busca» (modo trabajar)
+ * o, en la Plaza principal, el edificio de una persona (su CV).
+ */
+type CasaDeVilla = LocalEnMapa & {
+  busquedaId?: string;
+  presupuesto?: string | null;
+  /** Edificio de la Plaza: de quién es, si verificó su identidad y cuántos pisos tiene. */
+  usuarioId?: string;
+  verificado?: boolean;
+  pisos?: number;
+};
 
 /** Un «Se busca» se dibuja como un cartel de aviso en su lote (ver `crearCartelSeBusca`). */
 const casaDeSeBusca = (b: SeBuscaEnMapa): CasaDeVilla => ({
@@ -66,6 +84,20 @@ const casaDeSeBusca = (b: SeBuscaEnMapa): CasaDeVilla => ({
   color: COLOR_SE_BUSCA,
   avatarDueno: b.avatarAutor,
   aparienciaDueno: b.aparienciaAutor ?? null,
+  aparienciaCasa: null,
+});
+
+/** En la Plaza cada persona con locales tiene un edificio en su lote (`usuarios.lote_plaza`). */
+const casaDeEdificio = (e: EdificioEnMapa): CasaDeVilla => ({
+  id: e.usuarioId,
+  usuarioId: e.usuarioId,
+  verificado: e.verificado,
+  pisos: pisosEdificio(e.locales),
+  lote: e.lote,
+  nombre: e.nombre,
+  color: '#5f6f86',
+  avatarDueno: e.avatar,
+  aparienciaDueno: e.apariencia ?? null,
   aparienciaCasa: null,
 });
 
@@ -100,12 +132,17 @@ export interface DatosVilla {
  * Una villa: su propio mapa, que crece en filas a medida que se abren locales.
  * En el modo «Quiero trabajar» el mismo mapa muestra una casa por cada «Se busca» abierto.
  *
+ * La Plaza principal usa esta misma escena con su propio arte (`barrio` = 'plaza'): en cada lote, el edificio
+ * de una persona con locales (su CV). Solo existe en «Quiero contratar»: al pasar a «Quiero trabajar» se va
+ * a la primera villa.
+ *
  * Sectores: cada 60 casas (la entrada más 8 calles) se abre otro sector, «Creativo B», «Creativo C»…
  * El sector sale del número de lote, así las casas nunca cambian de lugar. Solo se dibuja el sector
  * donde está el jugador; se pasa con el letrero del final de la última calle o desde el selector de villas.
  */
 export class Villa extends Phaser.Scene {
-  readonly barrio: Barrio;
+  /** La villa (o la Plaza) de esta escena. */
+  readonly barrio: Lugar;
   private tema: TemaVilla;
   private jugador!: Jugador;
   /** El libro y el lápiz del jugador mientras «Mis pedidos» está abierto. */
@@ -145,7 +182,7 @@ export class Villa extends Phaser.Scene {
   private proximaRevision = 0;
   private viajando = false;
 
-  constructor(barrio: Barrio) {
+  constructor(barrio: Lugar) {
     super(`villa-${barrio}`);
     this.barrio = barrio;
     this.tema = TEMAS[barrio];
@@ -167,6 +204,11 @@ export class Villa extends Phaser.Scene {
   create(): void {
     const dpr = this.dpr();
     this.modo = (this.registry.get('modo') as ModoVilla | undefined) ?? 'contratar';
+    // La Plaza solo existe en «Quiero contratar».
+    if (this.barrio === 'plaza' && this.modo === 'trabajar') {
+      this.scene.start(`villa-${LISTA_BARRIOS[0]}`);
+      return;
+    }
     this.zoomCss = zoomVilla(this.scale.width / dpr, this.scale.height / dpr);
     this.resolucion = resolucionTexturas(this.zoomCss, dpr);
     this.cameras.main.setBackgroundColor(this.tema.pasto);
@@ -230,11 +272,15 @@ export class Villa extends Phaser.Scene {
     this.desuscribir.push(
       escuchar('locales', (locales) => {
         this.registry.set('locales', locales);
-        if (this.modo === 'contratar') this.recibirLocales(this.casasDelModo());
+        if (this.modo === 'contratar' && this.barrio !== 'plaza') this.recibirLocales(this.casasDelModo());
       }),
       escuchar('se-busca', (busquedas) => {
         this.registry.set('se-busca', busquedas);
-        if (this.modo === 'trabajar') this.recibirLocales(this.casasDelModo());
+        if (this.modo === 'trabajar' && this.barrio !== 'plaza') this.recibirLocales(this.casasDelModo());
+      }),
+      escuchar('edificios', (edificios) => {
+        this.registry.set('edificios', edificios);
+        if (this.barrio === 'plaza') this.recibirLocales(this.casasDelModo());
       }),
       escuchar('modo', (modo) => {
         this.registry.set('modo', modo);
@@ -351,7 +397,7 @@ export class Villa extends Phaser.Scene {
     });
   }
 
-  private irALocal({ barrio, lote }: { barrio: Barrio; lote: number }): void {
+  private irALocal({ barrio, lote }: { barrio: Lugar; lote: number }): void {
     if (barrio === this.barrio) this.irALote(lote);
     else this.viajar(barrio, lote);
   }
@@ -404,11 +450,11 @@ export class Villa extends Phaser.Scene {
     if (!mismaPuerta(puerta, this.puertaCercana)) {
       this.puertaCercana = puerta;
       if (cercana) {
-        this.marcaY = cercana.y - (puerta?.tipo === 'edificio' ? 118 : puerta?.tipo === 'lote-libre' ? 150 : 140);
+        this.marcaY = cercana.y - (puerta?.tipo === 'edificio' ? 118 : puerta?.tipo === 'tablon' ? 158 : puerta?.tipo === 'lote-libre' ? 150 : 140);
         this.marca.setPosition(cercana.x, this.marcaY).setVisible(true);
       } else this.marca.setVisible(false);
       emitir('cerca-de-puerta', puerta);
-      emitir('cerca-de-lote', puerta && this.modo === 'contratar' && puerta.tipo !== 'edificio' ? puerta.lote : null);
+      emitir('cerca-de-lote', puerta && this.modo === 'contratar' && (puerta.tipo === 'local' || puerta.tipo === 'lote-libre') ? puerta.lote : null);
     }
     if (this.marca.visible) this.marca.y = this.marcaY - 2 + Math.sin(tiempo / 130) * 2;
     // El jugador se dibuja delante de lo que está más arriba que sus pies y detrás de lo que está más abajo.
@@ -426,6 +472,7 @@ export class Villa extends Phaser.Scene {
 
   /** Casas del modo actual: locales («Quiero contratar») o «Se busca» abiertos («Quiero trabajar»). */
   private casasDelModo(): CasaDeVilla[] {
+    if (this.barrio === 'plaza') return ((this.registry.get('edificios') as EdificioEnMapa[] | undefined) ?? []).map(casaDeEdificio);
     if (this.modo === 'trabajar') return ((this.registry.get('se-busca') as SeBuscaEnMapa[] | undefined) ?? []).map(casaDeSeBusca);
     return (this.registry.get('locales') as LocalEnMapa[] | undefined) ?? [];
   }
@@ -434,6 +481,11 @@ export class Villa extends Phaser.Scene {
   private cambiarModo(): void {
     // Si ya está viajando, la escena que viene lee el modo nuevo del registro.
     if (this.viajando) return;
+    // La Plaza no tiene «Se busca»: en «Quiero trabajar» se va a la primera villa.
+    if (this.barrio === 'plaza') {
+      if ((this.registry.get('modo') as ModoVilla | undefined) === 'trabajar') this.viajar(LISTA_BARRIOS[0], null);
+      return;
+    }
     this.despertar();
     this.viajando = true;
     this.cameras.main.fadeOut(180, 253, 246, 227);
@@ -443,7 +495,8 @@ export class Villa extends Phaser.Scene {
   }
 
   private recibirLocales(todos: CasaDeVilla[]): void {
-    const deLaVilla = todos.filter((l) => l.barrio === this.barrio);
+    // En la Plaza todos los edificios son de la Plaza (no tienen villa).
+    const deLaVilla = this.barrio === 'plaza' ? todos : todos.filter((l) => l.barrio === this.barrio);
     const lotes = deLaVilla.map((l) => l.lote);
     this.loteLibreVilla = primerLoteLibre(lotes);
     const total = Math.max(1, sectorDeLote(this.loteLibreVilla), ...lotes.map((l) => sectorDeLote(l)));
@@ -455,7 +508,8 @@ export class Villa extends Phaser.Scene {
       this.anunciarSector();
     }
     this.locales = new Map(deLaVilla.filter((l) => sectorDeLote(l.lote) === this.sector).map((l) => [loteEnSector(l.lote), l]));
-    this.loteLibre = sectorDeLote(this.loteLibreVilla) === this.sector ? loteEnSector(this.loteLibreVilla) : 0;
+    // En la Plaza no hay lotes disponibles: los edificios se asignan solos al abrir el primer local.
+    this.loteLibre = this.barrio !== 'plaza' && sectorDeLote(this.loteLibreVilla) === this.sector ? loteEnSector(this.loteLibreVilla) : 0;
     // Un sector que ya se llenó muestra todas sus calles (y al final, el letrero al siguiente).
     const filas =
       this.sector < this.totalSectores ? plano.FILAS_POR_SECTOR : plano.filasNecesarias([...this.locales.keys(), ...(this.loteLibre ? [this.loteLibre] : [])]);
@@ -465,9 +519,11 @@ export class Villa extends Phaser.Scene {
     for (const [lote, casa] of this.locales) {
       const p = plano.puertaDeLote(lote);
       // La puerta lleva el lote de la villa (así React encuentra el local o el «Se busca»).
-      const puerta: Puerta = casa.busquedaId
-        ? { tipo: 'se-busca', barrio: this.barrio, lote: casa.lote, busquedaId: casa.busquedaId }
-        : { tipo: 'local', barrio: this.barrio, lote: casa.lote };
+      const puerta: Puerta = casa.usuarioId
+        ? { tipo: 'persona', barrio: this.barrio, lote: casa.lote, usuarioId: casa.usuarioId }
+        : casa.busquedaId
+          ? { tipo: 'se-busca', barrio: this.barrio, lote: casa.lote, busquedaId: casa.busquedaId }
+          : { tipo: 'local', barrio: this.barrio, lote: casa.lote };
       this.puertas.push({ puerta, ...p, distancia: DISTANCIA_PUERTA });
     }
     if (this.loteLibre) {
@@ -482,6 +538,8 @@ export class Villa extends Phaser.Scene {
       y: edificio.puerta.y,
       distancia: DISTANCIA_EDIFICIO,
     });
+    // El tablón de afiches (la búsqueda), en los dos modos.
+    this.puertas.push({ puerta: { tipo: 'tablon', barrio: this.barrio, lote: null }, x: PUERTA_TABLON.x + DX, y: PUERTA_TABLON.y, distancia: DISTANCIA_EDIFICIO });
     // Las puertas cambiaron: React deja de mostrar "Entrar a …" hasta que el jugador vuelva a acercarse.
     if (this.puertaCercana) {
       this.puertaCercana = null;
@@ -504,7 +562,7 @@ export class Villa extends Phaser.Scene {
     this.letreros.forEach((o) => (o instanceof Phaser.GameObjects.Zone ? this.obstaculos.remove(o, true, true) : o.destroy()));
     this.letreros = [];
     const R = this.resolucion;
-    const nombreVilla = BARRIOS[this.barrio].nombre;
+    const nombreVilla = nombreLugar(this.barrio);
     const poner = (direccion: 'siguiente' | 'anterior', sector: number, fila: number) => {
       const calle = plano.calleDeFila(fila);
       const x = direccion === 'siguiente' ? plano.ANCHO_VILLA - ANCHO_LETRERO_SECTOR - 6 : 6;
@@ -547,7 +605,9 @@ export class Villa extends Phaser.Scene {
 
   private firmaDe(lote: number): string {
     const l = this.locales.get(lote);
-    if (l) return JSON.stringify([l.busquedaId ?? null, l.nombre, l.presupuesto ?? null, l.color, l.aparienciaCasa ?? null, l.aparienciaDueno ?? null, l.avatarDueno]);
+    if (l) {
+      return JSON.stringify([l.busquedaId ?? null, l.usuarioId ?? null, l.verificado ?? null, l.pisos ?? null, l.nombre, l.presupuesto ?? null, l.color, l.aparienciaCasa ?? null, l.aparienciaDueno ?? null, l.avatarDueno]);
+    }
     return lote === this.loteLibre ? 'libre' : 'vacio';
   }
 
@@ -639,10 +699,13 @@ export class Villa extends Phaser.Scene {
     this.solido(248 + DX, 300, 104, 114);
     for (const t of e.textos) texto(this, t.x + DX, t.y - t.tamano * 0.36, t.texto, t, this.resolucion * 1.5).setDepth(416.5);
 
-    for (const x of [200, 560, 700]) {
+    // El tercer farol le dejó su lugar al tablón de afiches.
+    for (const x of [200, 560]) {
       this.pieza(`farol-${b}`, (t) => crearFarol(b, t), ANCHO_FAROL, ALTO_FAROL, x + DX, 346, 426);
       this.solido(x + DX + 6, 416, 12, 10);
     }
+    this.pieza(`tablon-${b}`, (t) => crearTablon(b, t), TABLON.ancho, TABLON.alto, TABLON.x + DX, TABLON.y, TABLON.y + TABLON.alto);
+    this.solido(TABLON.x + DX + 14, TABLON.y + TABLON.alto - 14, TABLON.ancho - 28, 10);
 
     // Árboles de la entrada: los de la muestra (corridos al centro) y algunos más a los lados.
     const arboles: [number, number][] = [
@@ -756,21 +819,27 @@ export class Villa extends Phaser.Scene {
       return;
     }
 
+    if (local.usuarioId) {
+      this.dibujarEdificio(lote, p, local, casa, vigente);
+      return;
+    }
     const seBusca = !!local.busquedaId;
     if (seBusca) {
       this.dibujarCartelSeBusca(lote, p, local, casa, vigente);
       return;
     }
+    // Las casas de los locales solo están en las villas (en la Plaza van los edificios).
+    const villa = this.barrio as Barrio;
     casa.objetos.push(this.solido(p.x + 4, p.y + 8, ANCHO_CASA - 8, ALTO_CASA - 14));
-    const aparienciaCasa = normalizarAparienciaCasa(this.barrio, local.aparienciaCasa);
-    const claveCasa = `casa:${this.barrio}:${seBusca ? 'se-busca:' : ''}${hashTexto(JSON.stringify([local.color, aparienciaCasa]))}@${R}`;
+    const aparienciaCasa = normalizarAparienciaCasa(villa, local.aparienciaCasa);
+    const claveCasa = `casa:${villa}:${seBusca ? 'se-busca:' : ''}${hashTexto(JSON.stringify([local.color, aparienciaCasa]))}@${R}`;
     casa.texturas.push(claveCasa);
     usarTextura(claveCasa);
-    void asegurarTextura(this, claveCasa, (t) => crearCasa({ barrio: this.barrio, apariencia: aparienciaCasa, color: local.color, cartelSeBusca: seBusca }, { tamano: t }), ANCHO_CASA, ALTO_CASA, R).then((ok) => {
+    void asegurarTextura(this, claveCasa, (t) => crearCasa({ barrio: villa, apariencia: aparienciaCasa, color: local.color, cartelSeBusca: seBusca }, { tamano: t }), ANCHO_CASA, ALTO_CASA, R).then((ok) => {
       if (ok && vigente()) casa.objetos.push(this.add.image(p.x, p.y, claveCasa).setOrigin(0).setScale(1 / R).setDepth(fondo - 1));
     });
 
-    const letrero = texto(this, p.x + LETRERO_CASA.x, p.y + LETRERO_CASA.y, '', { tamano: 12, peso: 700, color: colorTextoLetrero(this.barrio, aparienciaCasa) }, R * 1.5);
+    const letrero = texto(this, p.x + LETRERO_CASA.x, p.y + LETRERO_CASA.y, '', { tamano: 12, peso: 700, color: colorTextoLetrero(villa, aparienciaCasa) }, R * 1.5);
     letrero.setDepth(fondo - 0.5);
     ajustarTexto(letrero, local.nombre, LETRERO_CASA.ancho);
     casa.objetos.push(letrero);
@@ -788,6 +857,55 @@ export class Villa extends Phaser.Scene {
     });
   }
 
+  /** El edificio de una persona en la Plaza: sus pisos, su nombre (con la ✔ si verificó su identidad) y ella en la vereda. */
+  private dibujarEdificio(
+    lote: number,
+    p: { x: number; y: number },
+    e: CasaDeVilla,
+    casa: { objetos: Phaser.GameObjects.GameObject[]; texturas: string[] },
+    vigente: () => boolean,
+  ): void {
+    const fondo = p.y + ALTO_CASA;
+    const R = this.resolucion;
+    casa.objetos.push(this.solido(p.x + 8, p.y + 8, ANCHO_CASA - 16, ALTO_CASA - 14));
+    const pisos = e.pisos ?? 2;
+    const clave = `edificio:${hashTexto(JSON.stringify([e.usuarioId, pisos]))}@${R}`;
+    casa.texturas.push(clave);
+    usarTextura(clave);
+    void asegurarTextura(this, clave, (t) => crearEdificioPersona({ semilla: e.usuarioId ?? e.nombre, pisos }, { tamano: t }), ANCHO_CASA, ALTO_CASA, R).then((ok) => {
+      if (ok && vigente()) casa.objetos.push(this.add.image(p.x, p.y, clave).setOrigin(0).setScale(1 / R).setDepth(fondo - 1));
+    });
+
+    // El nombre en la cornisa (arriba: la persona en la vereda no lo tapa); con la ✔, el par queda centrado.
+    const conInsignia = !!e.verificado;
+    const cartel = letreroEdificio(pisos);
+    const letrero = texto(this, p.x + cartel.x, p.y + cartel.y, '', { tamano: 11, peso: 800, color: '#fdf6e3' }, R * 1.5);
+    letrero.setDepth(fondo - 0.5);
+    ajustarTexto(letrero, e.nombre, cartel.ancho - (conInsignia ? LADO_INSIGNIA + 4 : 0));
+    casa.objetos.push(letrero);
+    if (conInsignia) {
+      const corrida = (LADO_INSIGNIA + 4) / 2;
+      letrero.x -= corrida;
+      const claveInsignia = `insignia@${R}`;
+      marcarPermanente(claveInsignia);
+      const x = letrero.x + letrero.width / 2 + 4 + LADO_INSIGNIA / 2;
+      void asegurarTextura(this, claveInsignia, (t) => crearInsignia(t), LADO_INSIGNIA, LADO_INSIGNIA, R).then((ok) => {
+        if (ok && vigente()) casa.objetos.push(this.add.image(x, p.y + cartel.y, claveInsignia).setScale(1 / R).setDepth(fondo - 0.4));
+      });
+    }
+
+    const persona = aparienciaDeUsuario({ avatar: e.avatarDueno, apariencia: e.aparienciaDueno });
+    const clavePersona = this.clavePersona(persona);
+    casa.texturas.push(clavePersona);
+    usarTextura(clavePersona);
+    void this.texturaPersona(clavePersona, persona).then((ok) => {
+      if (!ok || !vigente()) return;
+      const sprite = this.add.image(p.x + DUENO_EDIFICIO.x, fondo + 1, clavePersona).setOrigin(0.5, 1).setScale(1 / R).setDepth(fondo + 1);
+      this.tweens.add({ targets: sprite, y: sprite.y - 1.5, duration: 700 + (lote % 7) * 53, yoyo: true, repeat: -1 });
+      casa.objetos.push(sprite);
+    });
+  }
+
   /** El cartel de aviso de un «Se busca», con su autor parado al lado. */
   private dibujarCartelSeBusca(
     lote: number,
@@ -800,10 +918,11 @@ export class Villa extends Phaser.Scene {
     const R = this.resolucion;
     // Solo el tablero y los postes estorban el paso: el frente queda libre para acercarse a leer.
     casa.objetos.push(this.solido(p.x + 8, p.y + 10, ANCHO_CASA - 16, 122));
-    const clave = `cartel-se-busca:${this.barrio}:${hashTexto(JSON.stringify([sb.nombre, sb.presupuesto ?? null]))}@${R}`;
+    const villa = this.barrio as Barrio;
+    const clave = `cartel-se-busca:${villa}:${hashTexto(JSON.stringify([sb.nombre, sb.presupuesto ?? null]))}@${R}`;
     casa.texturas.push(clave);
     usarTextura(clave);
-    void asegurarTextura(this, clave, (t) => crearCartelSeBusca({ barrio: this.barrio, titulo: sb.nombre, presupuesto: sb.presupuesto }, { tamano: t }), ANCHO_CASA, ALTO_CASA, R).then((ok) => {
+    void asegurarTextura(this, clave, (t) => crearCartelSeBusca({ barrio: villa, titulo: sb.nombre, presupuesto: sb.presupuesto }, { tamano: t }), ANCHO_CASA, ALTO_CASA, R).then((ok) => {
       if (ok && vigente()) casa.objetos.push(this.add.image(p.x, p.y, clave).setOrigin(0).setScale(1 / R).setDepth(fondo - 1));
     });
     const autor = aparienciaDeUsuario({ avatar: sb.avatarDueno, apariencia: sb.aparienciaDueno });
@@ -842,7 +961,7 @@ export class Villa extends Phaser.Scene {
       return;
     }
     emitir('entrar-puerta', p);
-    if (this.modo === 'contratar' && p.tipo !== 'edificio' && p.lote !== null) emitir('entrar-lote', p.lote);
+    if (this.modo === 'contratar' && (p.tipo === 'local' || p.tipo === 'lote-libre') && p.lote !== null) emitir('entrar-lote', p.lote);
   }
 
   /** Lleva al jugador frente a una casa de esta villa (`lote` cuenta todos los sectores). */
@@ -869,7 +988,7 @@ export class Villa extends Phaser.Scene {
   }
 
   /** Cambia de villa (o de sector) con una transición suave. */
-  private viajar(barrio: Barrio, destino: number | null): void {
+  private viajar(barrio: Lugar, destino: number | null): void {
     if (this.viajando) return;
     this.despertar();
     this.viajando = true;

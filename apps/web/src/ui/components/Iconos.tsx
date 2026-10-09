@@ -43,6 +43,10 @@ const TRAZOS = {
   tech: <><rect x="7" y="7" width="10" height="10" rx="2" /><path d="M10 4V7M14 4V7M10 17V20M14 17V20M4 10H7M4 14H7M17 10H20M17 14H20" /></>,
   audiovisual: <><rect x="3" y="7" width="18" height="12" rx="3" /><circle cx="12" cy="13" r="3.5" /><path d="M8 7L9.5 4.5H14.5L16 7" /></>,
   academy: <path d="M3 6C6 5 9 5 12 7C15 5 18 5 21 6V19C18 18 15 18 12 20C9 18 6 18 3 19ZM12 7V20" />,
+  // Plaza principal (CVs): la Casa de la Plaza con sus columnas.
+  plaza: <path d="M3 9L12 4L21 9M4 9H20M6 9V18M10 9V18M14 9V18M18 9V18M3 20H21M4 18H20" />,
+  edificio: <><rect x="6" y="3" width="12" height="18" rx="1" /><path d="M9 7H10M14 7H15M9 11H10M14 11H15M9 15H10M14 15H15M11 21V18H13V21" /></>,
+  documento: <path d="M7 3H14L19 8V20C19 20.6 18.6 21 18 21H7C6.4 21 6 20.6 6 20V4C6 3.4 6.4 3 7 3ZM14 3V8H19M9 13H16M9 17H14" />,
 } as const;
 
 export type NombreIcono = keyof typeof TRAZOS;

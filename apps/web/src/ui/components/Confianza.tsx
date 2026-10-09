@@ -4,7 +4,7 @@ import { api, mensajeDeError } from '../../lib/api';
 import { useEstado } from '../estado';
 
 /** Qué se puede reportar (lo mismo que acepta la API). */
-export type TipoReporte = 'local' | 'foto' | 'busqueda' | 'resena' | 'mensaje' | 'persona' | 'proyecto' | 'chat';
+export type TipoReporte = 'local' | 'foto' | 'busqueda' | 'resena' | 'mensaje' | 'persona' | 'proyecto' | 'chat' | 'trabajo_publico' | 'cv';
 
 /** Insignia ✔: la persona verificó su identidad (es real y tiene una sola cuenta). */
 export function Verificado({ si, tamano = 14 }: { si?: boolean | null; tamano?: number }) {

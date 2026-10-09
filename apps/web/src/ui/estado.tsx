@@ -1,9 +1,10 @@
-import type { Aviso, Barrio, DocumentoLegal } from '@cryptoville/shared';
+import { LISTA_BARRIOS, type Aviso, type Barrio, type DocumentoLegal, type Lugar } from '@cryptoville/shared';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSesion } from '../features/auth/sesion';
 import { cargarSeBusca, seBuscaEnMapa, type BusquedaPublica } from '../features/busquedas/datos';
 import { cargarPueblo, localEnMapa, type LocalDelPueblo } from '../features/services/datos';
-import { emitir, escuchar, type ModoVilla, type SectorActual } from '../game/EventBus';
+import { edificiosDe } from '../features/plaza/datos';
+import { emitir, escuchar, type EdificioEnMapa, type ModoVilla, type SectorActual } from '../game/EventBus';
 import { guardarModo, guardarVilla, modoGuardado, villaGuardada } from '../game/villaInicial';
 import { supabase } from '../lib/supabase';
 import type { TipoReporte } from './components/Confianza';
@@ -30,8 +31,14 @@ export type PanelAbierto =
   | { tipo: 'portafolio'; usuarioId: string }
   /** Un proyecto del portafolio. */
   | { tipo: 'proyecto'; id: string }
-  /** Editar mi portafolio. */
-  | { tipo: 'mi-portafolio' }
+  /** Editar mi portafolio. `nuevoProyecto`: abre un proyecto nuevo con esos datos («Pasar a mi portafolio»). */
+  | { tipo: 'mi-portafolio'; nuevoProyecto?: { titulo: string } }
+  /** Perfil → «Mis trabajos»: pedidos terminados (privado) y cuáles se muestran en el perfil público. */
+  | { tipo: 'mis-trabajos' }
+  /** El edificio de una persona en la Plaza principal: su CV y sus locales (desde aquí no se pide: se va al local). */
+  | { tipo: 'edificio'; usuarioId: string }
+  /** La Casa de la Plaza: qué es la Plaza principal y quiénes tienen edificio. */
+  | { tipo: 'plaza' }
   /** Buscador: "Servicios" (Quiero contratar) o "Se busca" (Quiero trabajar). */
   | { tipo: 'buscar'; pestana?: PestanaBuscar }
   | { tipo: 'arbitro' }
@@ -96,10 +103,14 @@ interface EstadoApp {
   cambiar(p: PanelAbierto): void;
   locales: LocalDelPueblo[];
   recargarPueblo(): Promise<void>;
-  /** Villa que se está mostrando. */
+  /** Última villa visitada (si estás en la Plaza, la de antes). Sirve de villa por defecto al publicar o abrir un local. */
   villa: Barrio;
-  /** Viajar a otra villa (cierra los paneles). */
-  irAVilla(barrio: Barrio): void;
+  /** Lo que se está mostrando: una villa o la Plaza principal. */
+  lugar: Lugar;
+  /** Viajar a otra villa o a la Plaza (cierra los paneles). */
+  irAVilla(barrio: Lugar): void;
+  /** Edificios de la Plaza principal (uno por persona con locales activos). */
+  edificios: EdificioEnMapa[];
   /** Sector de la villa que se está mostrando (1 = el primero, 2 = «B»…) y cuántos hay en este modo. */
   sector: SectorActual;
   irASector(sector: number): void;
@@ -108,9 +119,11 @@ interface EstadoApp {
   cambiarModo(modo: ModoVilla): void;
   /**
    * Lleva al jugador a un local. Los locales están en «Quiero contratar»: si estás en «Quiero trabajar»,
-   * primero cambia de modo. `destino`: el local o el edificio de la persona en la Plaza (fase 7; por ahora, el local).
+   * primero cambia de modo. `destino`: el local o el edificio de su dueña en la Plaza (si no tiene, el local).
    */
-  irAlLocal(local: { barrio: Barrio; lote: number }, destino?: 'local' | 'edificio'): void;
+  irAlLocal(local: { barrio: Barrio; lote: number; usuario_id?: string }, destino?: 'local' | 'edificio'): void;
+  /** Lleva al edificio de una persona en la Plaza (también cambia a «Quiero contratar»). Devuelve si lo encontró. */
+  irAlEdificio(usuarioId: string): boolean;
   /** Lleva al cartel de un «Se busca» (están en «Quiero trabajar»: si hace falta, cambia de modo). */
   irAlSeBusca(b: { barrio: Barrio; lote: number }): void;
   /** «Se busca» abiertos: las casas del modo «Quiero trabajar». */
@@ -143,7 +156,11 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
   const { usuario } = useSesion();
   const [pila, setPila] = useState<PanelAbierto[]>([]);
   const [locales, setLocales] = useState<LocalDelPueblo[]>([]);
-  const [villa, setVilla] = useState<Barrio>(villaGuardada);
+  const [lugar, setLugar] = useState<Lugar>(villaGuardada);
+  const [villa, setVilla] = useState<Barrio>(() => {
+    const v = villaGuardada();
+    return v === 'plaza' ? LISTA_BARRIOS[0] : v;
+  });
   const [sector, setSector] = useState<SectorActual>(() => ({ barrio: villaGuardada(), sector: 1, total: 1 }));
   const [modo, setModo] = useState<ModoVilla>(modoGuardado);
   const [seBusca, setSeBusca] = useState<BusquedaPublica[]>([]);
@@ -189,18 +206,21 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
     const datos = await cargarPueblo();
     setLocales(datos);
     emitir('locales', datos.map(localEnMapa));
+    emitir('edificios', edificiosDe(datos));
   }, []);
+  const edificios = useMemo(() => edificiosDe(locales), [locales]);
 
   // Phaser avisa a qué villa llegó el jugador (selector, buscador o al iniciar).
   useEffect(
     () =>
       escuchar('villa-actual', (b) => {
-        setVilla(b);
+        setLugar(b);
+        if (b !== 'plaza') setVilla(b);
         guardarVilla(b);
       }),
     [],
   );
-  const irAVilla = useCallback((b: Barrio) => {
+  const irAVilla = useCallback((b: Lugar) => {
     setPila([]);
     emitir('ir-a-villa', b);
   }, []);
@@ -216,13 +236,29 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
     emitir('modo', m);
   }, []);
 
-  const irAlLocal = useCallback(
-    (local: { barrio: Barrio; lote: number }, _destino: 'local' | 'edificio' = 'local') => {
+  const irAlEdificio = useCallback(
+    (usuarioId: string) => {
+      const e = edificios.find((x) => x.usuarioId === usuarioId);
+      if (!e) return false;
       // El modo cambia primero: la villa se reinicia y cumple el destino al volver a cargar.
+      if (modo !== 'contratar') cambiarModo('contratar');
+      emitir('ir-a-local', { barrio: 'plaza', lote: e.lote });
+      return true;
+    },
+    [edificios, modo, cambiarModo],
+  );
+
+  const irAlLocal = useCallback(
+    (local: { barrio: Barrio; lote: number; usuario_id?: string }, destino: 'local' | 'edificio' = 'local') => {
+      if (destino === 'edificio') {
+        const duena = local.usuario_id ?? locales.find((l) => l.barrio === local.barrio && l.lote === local.lote)?.usuario_id;
+        // Sin edificio (por ejemplo, un local que se acaba de abrir y todavía no se recargó), se va al local.
+        if (duena && irAlEdificio(duena)) return;
+      }
       if (modo !== 'contratar') cambiarModo('contratar');
       emitir('ir-a-local', { barrio: local.barrio, lote: local.lote });
     },
-    [modo, cambiarModo],
+    [modo, cambiarModo, locales, irAlEdificio],
   );
 
   const irAlSeBusca = useCallback(
@@ -328,12 +364,15 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
       locales,
       recargarPueblo,
       villa,
+      lugar,
       irAVilla,
+      edificios,
       sector,
       irASector,
       modo,
       cambiarModo,
       irAlLocal,
+      irAlEdificio,
       irAlSeBusca,
       seBusca,
       version,
@@ -350,7 +389,7 @@ export function ProveedorEstado({ children }: { children: ReactNode }) {
       mensajeCercania,
       registrarMensaje,
     }),
-    [panel, pila.length, abrir, atras, cerrar, cambiar, locales, recargarPueblo, villa, irAVilla, sector, irASector, modo, cambiarModo, irAlLocal, irAlSeBusca, seBusca, version, refrescar, avisosSinLeer, notificaciones, notificar, avisar, descartar, chatCon, abrirChat, cerrarChat, mensajeCercania, registrarMensaje],
+    [panel, pila.length, abrir, atras, cerrar, cambiar, locales, recargarPueblo, villa, lugar, irAVilla, edificios, sector, irASector, modo, cambiarModo, irAlLocal, irAlEdificio, irAlSeBusca, seBusca, version, refrescar, avisosSinLeer, notificaciones, notificar, avisar, descartar, chatCon, abrirChat, cerrarChat, mensajeCercania, registrarMensaje],
   );
   return <Contexto.Provider value={valor}>{children}</Contexto.Provider>;
 }

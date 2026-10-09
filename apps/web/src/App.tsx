@@ -1,11 +1,14 @@
 import {
   AVATAR_INVITADO,
-  BARRIOS,
-  LISTA_BARRIOS,
+  LISTA_LUGARES,
+  PLAZA,
   aparienciaDeAvatar,
   aparienciaDeUsuario,
+  colorLugar,
   datosDocumento,
+  nombreLugar,
   nombreSector,
+  tituloLugar,
   type AparienciaPersona,
   type Barrio,
   type DatosDocumento,
@@ -43,6 +46,11 @@ import { PanelLote, PanelLoteLibre } from './ui/panels/PanelLote';
 import { PanelMiLocal } from './ui/panels/PanelMiLocal';
 import { PanelMisLocales } from './ui/panels/PanelMisLocales';
 import { PanelMiPortafolio, PanelPortafolio, PanelProyecto } from './ui/panels/PanelPortafolio';
+import { PanelMisTrabajos } from './ui/panels/PanelTrabajos';
+import { PanelEdificio, PanelPlaza } from './ui/panels/PanelPlaza';
+import { RecomendacionCv } from './ui/components/RecomendacionCv';
+import { edificiosDe } from './features/plaza/datos';
+import type { EdificioEnMapa } from './game/EventBus';
 import { PanelPedido } from './ui/panels/PanelPedido';
 import { PanelPedidos } from './ui/panels/PanelPedidos';
 import { PanelPerfil, PanelPersonaje, PanelPersonalizar } from './ui/panels/PanelPerfil';
@@ -117,7 +125,9 @@ function Pueblo() {
     descartar,
     avisosSinLeer,
     villa,
+    lugar,
     irAVilla,
+    edificios,
     sector,
     irASector,
     modo,
@@ -130,9 +140,9 @@ function Pueblo() {
   } = useEstado();
   // Chat por cercanía: quién está cerca para hablar («Hablar con… [H]»).
   const [personaCerca, setPersonaCerca] = useState<{ id: string; nombre: string } | null>(null);
-  // Sector de la villa actual («Creativo», «Creativo B»…): solo si el dato es de esta villa.
-  const sectorVilla = sector.barrio === villa ? sector : { barrio: villa, sector: 1, total: 1 };
-  const nombreVilla = nombreSector(BARRIOS[villa].nombre, sectorVilla.sector);
+  // Sector del lugar actual («Creativo», «Creativo B», «Plaza B»…): solo si el dato es de este lugar.
+  const sectorVilla = sector.barrio === lugar ? sector : { barrio: lugar, sector: 1, total: 1 };
+  const nombreVilla = nombreSector(nombreLugar(lugar), sectorVilla.sector);
   const [puertaCercana, setPuertaCercana] = useState<Puerta | null>(null);
   const interiorAbierto = useRef(false);
   const [tactil] = useState(esTactil);
@@ -222,6 +232,8 @@ function Pueblo() {
   localesRef.current = locales;
   const seBuscaRef = useRef(seBusca);
   seBuscaRef.current = seBusca;
+  const edificiosRef = useRef<EdificioEnMapa[]>(edificios);
+  edificiosRef.current = edificios;
   const modoRef = useRef(modo);
   modoRef.current = modo;
   // Sin sesión, la villa muestra el personaje de invitado (no el de la última cuenta).
@@ -234,9 +246,33 @@ function Pueblo() {
       escuchar('cerca-de-puerta', setPuertaCercana),
       escuchar('entrar-puerta', (p) => {
         if (p.tipo === 'edificio') {
-          abrir({ tipo: 'datos-curiosos', barrio: p.barrio });
+          // La Casa de la Plaza explica la Plaza; el edificio central de cada villa, sus datos curiosos.
+          if (p.barrio === 'plaza') abrir({ tipo: 'plaza' });
+          else abrir({ tipo: 'datos-curiosos', barrio: p.barrio });
           return;
         }
+        // Plaza principal: el edificio de una persona (su CV, sus locales y la pared de sus proyectos).
+        if (p.tipo === 'persona' && p.usuarioId) {
+          const e = edificiosRef.current.find((x) => x.usuarioId === p.usuarioId);
+          if (e) {
+            interiorAbierto.current = true;
+            emitir('abrir-interior', { tipo: 'edificio', nombre: e.nombre, avatarDueno: e.avatar, aparienciaDueno: e.apariencia ?? null });
+            void cargarDestacados(e.usuarioId).then(
+              (ps) => interiorAbierto.current && emitir('cuadros-interior', ps.map((x) => ({ id: x.id, titulo: x.titulo, foto: x.fotos[0] ?? null }))),
+              () => undefined,
+            );
+          }
+          abrir({ tipo: 'edificio', usuarioId: p.usuarioId });
+          return;
+        }
+        // El tablón de afiches: la búsqueda del modo en que estás (lo mismo que la lupa).
+        if (p.tipo === 'tablon') {
+          abrir({ tipo: 'buscar', pestana: modoRef.current === 'trabajar' ? 'se-busca' : 'servicios' });
+          return;
+        }
+        // En la Plaza no hay locales ni lotes disponibles.
+        if (p.barrio === 'plaza') return;
+        const barrio = p.barrio;
         // Modo «Quiero trabajar»: cada «Se busca» es un cartel de aviso; se lee directo, sin interior.
         if (p.tipo === 'se-busca' && p.busquedaId) {
           abrir({ tipo: 'busqueda', id: p.busquedaId });
@@ -244,11 +280,11 @@ function Pueblo() {
         }
         // El lote disponible ofrece lo del rol de cada modo (publicar lo que necesitas o abrir tu local).
         if (p.tipo === 'lote-libre') {
-          abrir({ tipo: 'lote-libre', barrio: p.barrio });
+          abrir({ tipo: 'lote-libre', barrio });
           return;
         }
         if (p.lote === null) return;
-        const local = localesRef.current.find((l) => l.barrio === p.barrio && l.lote === p.lote);
+        const local = localesRef.current.find((l) => l.barrio === barrio && l.lote === p.lote);
         if (local) {
           interiorAbierto.current = true;
           emitir('abrir-interior', {
@@ -265,7 +301,7 @@ function Pueblo() {
             () => undefined,
           );
         }
-        abrir({ tipo: 'lote', lote: p.lote, barrio: p.barrio });
+        abrir({ tipo: 'lote', lote: p.lote, barrio });
       }),
       escuchar('salio-del-local', () => cerrar()),
       escuchar('abrir-proyecto', (id) => abrir({ tipo: 'proyecto', id })),
@@ -273,6 +309,7 @@ function Pueblo() {
       escuchar('hablar-con', (id) => abrirChat(id)),
       escuchar('pueblo-listo', () => {
         emitir('locales', localesRef.current.map(localEnMapa));
+        emitir('edificios', edificiosDe(localesRef.current));
         emitir('se-busca', seBuscaRef.current.map(seBuscaEnMapa));
         emitir('modo', modoRef.current);
         emitir('apariencia', aparienciaRef.current);
@@ -314,9 +351,16 @@ function Pueblo() {
     cerrar();
   };
 
-  const enVilla = modo === 'trabajar' ? seBusca.filter((b) => b.barrio === villa).length : locales.filter((l) => l.barrio === villa).length;
-  const queHay = modo === 'trabajar' ? '«Se busca»' : enVilla === 1 ? 'local' : 'locales';
-  const textoEntrar = textoPuerta(puertaCercana, modo, locales, seBusca);
+  const enPlaza = lugar === 'plaza';
+  const enVilla = enPlaza
+    ? edificios.length
+    : modo === 'trabajar'
+      ? seBusca.filter((b) => b.barrio === lugar).length
+      : locales.filter((l) => l.barrio === lugar).length;
+  const queHay = enPlaza ? (enVilla === 1 ? 'CV' : 'CVs') : modo === 'trabajar' ? '«Se busca»' : enVilla === 1 ? 'local' : 'locales';
+  const textoEntrar = textoPuerta(puertaCercana, modo, locales, seBusca, edificios);
+  // La Plaza principal solo está en «Quiero contratar».
+  const lugares = LISTA_LUGARES.filter((l) => l !== 'plaza' || modo === 'contratar');
   /** El interruptor solo cambia el modo: la villa se arma con las otras casas (no se abre ninguna lista). */
   const elegirModo = (m: ModoVilla) => {
     if (m === modo) return;
@@ -339,10 +383,19 @@ function Pueblo() {
             <span className="solo-ancho-medio">WorkVille</span>
           </button>
           <div className="pastilla villa-actual">
-            <span className="punto" style={{ background: BARRIOS[villa].color }} />
+            <span className="punto" style={{ background: colorLugar(lugar).color }} />
             <span>
-              <span className="solo-ancho-medio">Villa </span>
-              {nombreVilla}
+              {enPlaza ? (
+                <>
+                  {nombreVilla}
+                  <span className="solo-ancho-medio"> principal</span>
+                </>
+              ) : (
+                <>
+                  <span className="solo-ancho-medio">Villa </span>
+                  {nombreVilla}
+                </>
+              )}
             </span>
             <span className="tenue solo-ancho">
               · {enVilla} {queHay}
@@ -427,29 +480,32 @@ function Pueblo() {
       </header>
 
       <nav className="villas" aria-label="Villas">
-        {LISTA_BARRIOS.map((b) => {
-          const activa = b === villa;
+        {/* La Plaza principal (CVs) va primera y solo en «Quiero contratar». */}
+        {lugares.map((b) => {
+          const activa = b === lugar;
+          const c = colorLugar(b);
           return (
             <button
               key={b}
               type="button"
-              className={`villa ${activa ? 'activa' : ''}`}
+              className={`villa ${activa ? 'activa' : ''} ${b === 'plaza' ? 'villa-plaza' : ''}`}
               aria-current={activa ? 'true' : undefined}
-              aria-label={`Villa ${BARRIOS[b].nombre}`}
-              style={activa ? { background: BARRIOS[b].colorSuave, color: BARRIOS[b].colorOscuro } : undefined}
+              aria-label={tituloLugar(b)}
+              title={b === 'plaza' ? 'Plaza principal (CVs de usuarios)' : undefined}
+              style={activa ? { background: c.colorSuave, color: c.colorOscuro } : undefined}
               onClick={() => !activa && irAVilla(b)}
             >
-              <Icono nombre={b} color={activa ? undefined : BARRIOS[b].color} />
-              <span className="villa-nombre">{BARRIOS[b].nombre}</span>
+              <Icono nombre={b} color={activa ? undefined : c.color} />
+              <span className="villa-nombre">{nombreLugar(b)}</span>
             </button>
           );
         })}
-        {/* Sectores de la villa actual («Creativo», «B», «C»…): aparecen cuando se llenan las primeras 60 casas. */}
+        {/* Sectores del lugar actual («Creativo», «B», «C»…): aparecen cuando se llenan las primeras 60 casas. */}
         {sectorVilla.total > 1 && (
-          <span className="sectores" role="group" aria-label={`Sectores de la Villa ${BARRIOS[villa].nombre}`}>
+          <span className="sectores" role="group" aria-label={`Sectores de ${tituloLugar(lugar)}`}>
             {Array.from({ length: sectorVilla.total }, (_, i) => i + 1).map((s) => {
               const activo = s === sectorVilla.sector;
-              const nombre = nombreSector(BARRIOS[villa].nombre, s);
+              const nombre = nombreSector(nombreLugar(lugar), s);
               return (
                 <button
                   key={s}
@@ -460,7 +516,7 @@ function Pueblo() {
                   title={nombre}
                   onClick={() => !activo && irASector(s)}
                 >
-                  {s === 1 ? 'A' : nombre.slice(BARRIOS[villa].nombre.length + 1)}
+                  {s === 1 ? 'A' : nombre.slice(nombreLugar(lugar).length + 1)}
                 </button>
               );
             })}
@@ -488,16 +544,19 @@ function Pueblo() {
       {!panel && !tactil && !textoEntrar && !personaCerca && <p className="ayuda-controles">Camina con las flechas o WASD · entra con E · habla con H</p>}
       <PersonasEnLinea />
       <ChatCercania />
+      {!panel && <RecomendacionCv />}
       {tactil && !panel && <Joystick />}
 
       {panel && (
         <Panel
           titulo={tituloPanel(panel, locales, villa)}
           portada={portadaPanel(panel, locales, villa)}
-          amplio={['pedido', 'perfil', 'mi-local', 'mis-locales', 'personaje', 'portafolio', 'proyecto', 'mi-portafolio', 'arbitro', 'busqueda', 'legal', 'comentarios-equipo'].includes(panel.tipo)}
-          completo={enPedidos && pedidosCompleto}
+          amplio={['pedido', 'perfil', 'mi-local', 'mis-locales', 'personaje', 'portafolio', 'proyecto', 'mi-portafolio', 'mis-trabajos', 'edificio', 'arbitro', 'busqueda', 'legal', 'comentarios-equipo'].includes(panel.tipo)}
+          // El buscador es el tablón de afiches: siempre a pantalla completa.
+          completo={(enPedidos && pedidosCompleto) || panel.tipo === 'buscar'}
+          clase={panel.tipo === 'buscar' ? 'panel-tablon' : undefined}
           onAlternarCompleto={enPedidos ? alternarPedidosCompleto : undefined}
-          lateral={usuario ? <Escribiendo avatar={usuario.avatar} apariencia={usuario.apariencia ?? null} /> : undefined}
+          lateral={usuario && enPedidos ? <Escribiendo avatar={usuario.avatar} apariencia={usuario.apariencia ?? null} /> : undefined}
           onCerrar={panel.tipo === 'bienvenida' ? cerrarBienvenida : cerrar}
           onAtras={puedeVolver ? atras : undefined}
         >
@@ -551,9 +610,14 @@ function guardarPedidosCompleto(completo: boolean): void {
   }
 }
 
-function textoPuerta(p: Puerta | null, modo: ModoVilla, locales: LocalDelPueblo[], seBusca: BusquedaPublica[]): string | null {
+function textoPuerta(p: Puerta | null, modo: ModoVilla, locales: LocalDelPueblo[], seBusca: BusquedaPublica[], edificios: EdificioEnMapa[]): string | null {
   if (!p) return null;
-  if (p.tipo === 'sector') return `Ir a Villa ${nombreSector(BARRIOS[p.barrio].nombre, p.sector ?? 1)}`;
+  if (p.tipo === 'sector') return `Ir a ${p.barrio === 'plaza' ? '' : 'Villa '}${nombreSector(nombreLugar(p.barrio), p.sector ?? 1)}`;
+  if (p.tipo === 'tablon') return 'Mirar el tablón de afiches';
+  if (p.tipo === 'persona') {
+    const e = edificios.find((x) => x.usuarioId === p.usuarioId);
+    return e ? `Entrar al edificio de ${e.nombre}` : 'Entrar al edificio';
+  }
   if (p.tipo === 'lote-libre') return modo === 'trabajar' ? 'Abrir tu local' : 'Publicar lo que necesitas';
   if (p.tipo === 'edificio') return `Entrar a ${edificioCentral(p.barrio).nombre}`;
   if (p.tipo === 'se-busca') {
@@ -574,6 +638,7 @@ function portadaPanel(p: PanelAbierto, locales: LocalDelPueblo[], villa: Barrio)
     return local ? portadaDe(local.barrio) : undefined;
   }
   if (p.tipo === 'datos-curiosos') return portadaDe(p.barrio);
+  if (p.tipo === 'edificio' || p.tipo === 'plaza') return `linear-gradient(135deg, ${PLAZA.color}, ${PLAZA.colorOscuro})`;
   return undefined;
 }
 
@@ -609,9 +674,17 @@ function tituloPanel(p: PanelAbierto, locales: LocalDelPueblo[], villa: Barrio):
     case 'proyecto':
       return 'Proyecto';
     case 'mi-portafolio':
-      return 'Mi portafolio';
+      return 'Mi CV y portafolio';
+    case 'mis-trabajos':
+      return 'Mis trabajos';
+    case 'edificio': {
+      const duena = locales.find((l) => l.usuario_id === p.usuarioId)?.usuario;
+      return duena ? `CV de ${duena.nombre}` : 'Edificio';
+    }
+    case 'plaza':
+      return 'Casa de la Plaza';
     case 'buscar':
-      return p.pestana === 'se-busca' ? 'Quiero trabajar' : 'Quiero contratar';
+      return 'Tablón de afiches';
     case 'arbitro':
       return 'Panel del árbitro';
     case 'avisos':
@@ -678,7 +751,13 @@ function contenidoPanel(
     case 'proyecto':
       return <PanelProyecto key={p.id} id={p.id} />;
     case 'mi-portafolio':
-      return <PanelMiPortafolio />;
+      return <PanelMiPortafolio key={p.nuevoProyecto?.titulo ?? 'portafolio'} nuevoProyecto={p.nuevoProyecto} />;
+    case 'mis-trabajos':
+      return <PanelMisTrabajos />;
+    case 'edificio':
+      return <PanelEdificio key={p.usuarioId} usuarioId={p.usuarioId} />;
+    case 'plaza':
+      return <PanelPlaza />;
     case 'buscar':
       return <PanelBuscar pestana={p.pestana ?? 'servicios'} />;
     case 'arbitro':
