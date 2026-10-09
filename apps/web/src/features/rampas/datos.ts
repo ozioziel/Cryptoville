@@ -50,3 +50,16 @@ export function faltaParaPagar(monto: string, saldo: string | null): string {
   const centavos = Math.ceil(Math.max(falta, 1) * 100) / 100;
   return centavos.toFixed(2);
 }
+
+// El saldo de arriba se vuelve a leer cuando algo lo cambia (pago, recarga, retiro…).
+const alCambiarSaldo = new Set<() => void>();
+
+/** Avisa que el saldo pudo cambiar (después de un pago, una recarga o un retiro). */
+export function avisarCambioDeSaldo(): void {
+  for (const f of alCambiarSaldo) f();
+}
+
+export function escucharCambioDeSaldo(f: () => void): () => void {
+  alCambiarSaldo.add(f);
+  return () => alCambiarSaldo.delete(f);
+}

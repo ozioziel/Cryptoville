@@ -9,7 +9,8 @@ import type { PedidoDetalle } from './features/orders/datos';
 import { filtrarSeBusca } from './features/busquedas/filtrar';
 import { buscarServicios } from './features/services/buscar';
 import type { LocalDelPueblo } from './features/services/datos';
-import { crearCasa, crearInterior } from './arte/casa';
+import { crearCartelSeBusca, crearCasa, crearInterior } from './arte/casa';
+import { ALTO_LAPIZ, ALTO_LIBRO, ANCHO_LAPIZ, ANCHO_LIBRO, crearLapiz, crearLibroAbierto } from './arte/escribir';
 import { crearPersona } from './arte/persona';
 import * as plano from './game/plano';
 import { resolucionTexturas, zoomPara, zoomVilla } from './game/zoom';
@@ -283,5 +284,33 @@ describe('dibujo en vectores', () => {
     const conCartel = crearCasa({ barrio: 'tech', apariencia: null, color: '#e9b44c', cartelSeBusca: true });
     expect(conCartel).toContain('SE BUSCA');
     expect(crearCasa({ barrio: 'tech', apariencia: null, color: '#e9b44c' })).not.toContain('SE BUSCA');
+  });
+
+  it('el cartel de aviso de un «Se busca» ocupa el lugar de una casa, con título y presupuesto escapados', () => {
+    for (const b of LISTA_BARRIOS) {
+      const svg = crearCartelSeBusca({ barrio: b, titulo: 'Logo para mi tienda', presupuesto: 'hasta 35 USDC' });
+      expect(svg).toContain('viewBox="0 0 150 172"');
+      expect(svg).toContain('SE BUSCA');
+      expect(svg).toContain('hasta 35 USDC');
+    }
+    const raro = crearCartelSeBusca({ barrio: 'creativo', titulo: '<script>x</script> & más', presupuesto: '<b>9</b>' });
+    expect(raro).not.toContain('<script>');
+    expect(raro).not.toContain('<b>');
+    expect(raro).toContain('&amp;');
+    // Sin presupuesto no hay pastilla.
+    expect(crearCartelSeBusca({ barrio: 'tech', titulo: 'Clases' })).not.toContain('USDC');
+  });
+
+  it('un título largo del cartel se corta en dos líneas y termina en «…»', () => {
+    const svg = crearCartelSeBusca({ barrio: 'academy', titulo: 'Necesito clases de guitarra para principiantes los sábados por la tarde' });
+    const lineas = [...svg.matchAll(/font-size="10"[^>]*>([^<]*)</g)].map((m) => m[1]);
+    expect(lineas).toHaveLength(2);
+    expect(lineas.every((l) => l.length <= 17)).toBe(true);
+    expect(lineas[1].endsWith('…')).toBe(true);
+  });
+
+  it('el libro y el lápiz de «Mis pedidos» son SVG sueltos (para animar solo el lápiz)', () => {
+    expect(crearLibroAbierto()).toContain(`viewBox="0 0 ${ANCHO_LIBRO} ${ALTO_LIBRO}"`);
+    expect(crearLapiz()).toContain(`viewBox="0 0 ${ANCHO_LAPIZ} ${ALTO_LAPIZ}"`);
   });
 });

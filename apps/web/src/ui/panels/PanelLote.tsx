@@ -4,6 +4,7 @@ import { useSesion } from '../../features/auth/sesion';
 import { cargarResenas, type ResenaPublica } from '../../features/services/datos';
 import { cargarDestacados } from '../../features/portafolio/datos';
 import type { Proyecto } from '@cryptoville/shared';
+import { ServiciosDelLocal } from './PanelMiLocal';
 import { TarjetaProyecto } from './PanelPortafolio';
 import { obtenerConfig } from '../../lib/config';
 import { useEstado } from '../estado';
@@ -94,8 +95,10 @@ export function PanelLote({ lote, barrio }: { lote: number; barrio?: Barrio }) {
       </div>
       {local.descripcion && <p>{local.descripcion}</p>}
 
-      {local.servicios.length === 0 && <p className="tenue">Este local todavía no publica servicios.</p>}
-      <ul className="lista-tarjetas" aria-label="Servicios">
+      {/* En tu propio local, los servicios se manejan aquí mismo: agregar, editar y quitar. */}
+      {esMio && <ServiciosDelLocal localId={local.id} />}
+      {!esMio && local.servicios.length === 0 && <p className="tenue">Este local todavía no publica servicios.</p>}
+      <ul className="lista-tarjetas" aria-label="Servicios" hidden={esMio}>
         {local.servicios.map((s) => (
           <li key={s.id}>
             <button type="button" className="servicio" onClick={() => abrir({ tipo: 'servicio', servicioId: s.id })}>
@@ -169,6 +172,73 @@ export function PanelLote({ lote, barrio }: { lote: number; barrio?: Barrio }) {
           ))}
         </ul>
       </section>
+    </div>
+  );
+}
+
+/**
+ * Lote disponible, según el rol del modo:
+ * - «Quiero contratar» (cliente): publicar lo que necesitas. El «Se busca» aparece como cartel en «Quiero trabajar».
+ * - «Quiero trabajar» (proveedor): abrir tu local. El local aparece en «Quiero contratar», donde lo encuentran los clientes.
+ */
+export function PanelLoteLibre({ barrio }: { barrio: Barrio }) {
+  const { abrir, modo } = useEstado();
+  const { usuario, locales: misLocales } = useSesion();
+  const villa = BARRIOS[barrio].nombre;
+
+  if (modo === 'contratar') {
+    return (
+      <div className="pila">
+        <div className="lote-libre">
+          <strong>Lote disponible</strong>
+          <span className="tenue">Publica lo que necesitas</span>
+        </div>
+        <p>
+          ¿Buscas a alguien para un trabajo en la <strong>Villa {villa}</strong>? Publica lo que necesitas y los proveedores te mandan sus
+          propuestas.
+        </p>
+        <p className="tenue pequeno">Tu «Se busca» aparece como un cartel en el modo «Quiero trabajar», donde lo ven los proveedores.</p>
+        <button
+          type="button"
+          className="boton boton-primario"
+          onClick={() => abrir(usuario ? { tipo: 'publicar-busqueda', barrio } : { tipo: 'bienvenida' })}
+        >
+          {usuario ? 'Publicar lo que necesito' : 'Entra para publicar'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pila">
+      <div className="lote-libre">
+        <strong>Lote disponible</strong>
+        <span className="tenue">Abre tu local</span>
+      </div>
+      <p>
+        ¿Ofreces tus servicios? Abre tu local en la <strong>Villa {villa}</strong> y suma hasta 6 servicios.
+      </p>
+      <p className="tenue pequeno">Tu local aparece en el modo «Quiero contratar», donde te encuentran los clientes.</p>
+      {!usuario && (
+        <button type="button" className="boton boton-primario" onClick={() => abrir({ tipo: 'bienvenida' })}>
+          Entra para abrir tu local
+        </button>
+      )}
+      {usuario && misLocales.length === 0 && (
+        <button type="button" className="boton boton-primario" onClick={() => abrir({ tipo: 'mi-local' })}>
+          Abrir mi local
+        </button>
+      )}
+      {usuario && misLocales.length > 0 && (
+        <>
+          <p className="tenue">
+            Ya tienes {misLocales.length === 1 ? 'un local' : `${misLocales.length} locales`}. Puedes abrir hasta 3 gratis; los que siguen se pagan una sola vez.
+          </p>
+          <button type="button" className="boton boton-primario" onClick={() => abrir({ tipo: 'mis-locales' })}>
+            Mis locales
+          </button>
+        </>
+      )}
     </div>
   );
 }

@@ -4,7 +4,6 @@ import { useSesion } from '../../features/auth/sesion';
 import { cargarSeBusca, type BusquedaPublica } from '../../features/busquedas/datos';
 import { filtrarSeBusca } from '../../features/busquedas/filtrar';
 import { buscarServicios } from '../../features/services/buscar';
-import { emitir } from '../../game/EventBus';
 import { mensajeDeError } from '../../lib/api';
 import { useEstado, type PestanaBuscar } from '../estado';
 import { chipDe } from '../villas';
@@ -89,7 +88,7 @@ function FiltrosVilla({
 }
 
 function BuscarServicios() {
-  const { locales, abrir, cerrar, villa } = useEstado();
+  const { locales, abrir, cerrar, villa, irAlLocal } = useEstado();
   const [texto, setTexto] = useState('');
   const [barrio, setBarrio] = useState<Barrio | 'todos'>('todos');
   const [categoria, setCategoria] = useState<string>('todas');
@@ -143,7 +142,7 @@ function BuscarServicios() {
                 className="boton boton-mini"
                 onClick={() => {
                   cerrar();
-                  emitir('ir-a-local', { barrio: local.barrio, lote: local.lote });
+                  irAlLocal(local);
                 }}
               >
                 Ir al local <Icono nombre="flecha" tamano={14} />

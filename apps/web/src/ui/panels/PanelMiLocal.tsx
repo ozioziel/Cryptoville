@@ -16,13 +16,13 @@ import {
 import { useMemo, useState } from 'react';
 import { crearCasa, crearInterior } from '../../arte/casa';
 import { useSesion } from '../../features/auth/sesion';
-import { emitir } from '../../game/EventBus';
 import { api, mensajeDeError } from '../../lib/api';
 import { supabase } from '../../lib/supabase';
 import { useEstado } from '../estado';
 import { Aviso } from '../components/basicos';
 import { Pestanas, SelectorPieza } from '../components/Editor';
 import { Icono } from '../components/Iconos';
+import { BotonEliminarLocal } from './PanelMisLocales';
 
 const TAMANO_MAXIMO = 2 * 1024 * 1024;
 
@@ -40,7 +40,7 @@ const COLORES_DUENO: readonly OpcionPieza[] = COLORES_LOCAL.map((color, i) => ({
  */
 export function PanelMiLocal({ localId }: { localId?: string }) {
   const { usuario, local: principal, locales: mios, recargar } = useSesion();
-  const { locales, recargarPueblo, notificar, villa, cambiar } = useEstado();
+  const { recargarPueblo, notificar, villa, cambiar, irAlLocal } = useEstado();
   const local = localId === 'nuevo' ? null : localId ? (mios.find((l) => l.id === localId) ?? null) : principal;
   const [nombre, setNombre] = useState(local?.nombre ?? '');
   const [barrio, setBarrio] = useState<Barrio>(local?.barrio ?? villa);
@@ -49,7 +49,6 @@ export function PanelMiLocal({ localId }: { localId?: string }) {
   const [descripcion, setDescripcion] = useState(local?.descripcion ?? '');
   const [casa, setCasa] = useState<AparienciaCasa>(() => normalizarAparienciaCasa(local?.barrio ?? villa, local?.apariencia));
   const [parte, setParte] = useState<'exterior' | 'interior'>('exterior');
-  const [editando, setEditando] = useState<Servicio | 'nuevo' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
 
@@ -59,7 +58,6 @@ export function PanelMiLocal({ localId }: { localId?: string }) {
   if (!usuario) return <p className="tenue">Entra para abrir tu local.</p>;
   if (localId && localId !== 'nuevo' && !local) return <p className="tenue">Ese local no es tuyo o ya no existe.</p>;
 
-  const servicios = local ? (locales.find((l) => l.id === local.id)?.servicios ?? []) : [];
 
   const cambiarVilla = (b: Barrio) => {
     setBarrio(b);
@@ -78,8 +76,12 @@ export function PanelMiLocal({ localId }: { localId?: string }) {
         : await api<{ id: string; lote: number; barrio: Barrio }>(mios.length ? '/locales' : '/mi-local', { metodo: mios.length ? 'POST' : 'PUT', cuerpo });
       await recargar();
       await recargarPueblo();
-      emitir('ir-a-local', { barrio: nuevo.barrio, lote: nuevo.lote });
-      notificar(local ? 'Local actualizado' : `¡Abriste tu local en la Villa ${BARRIOS[nuevo.barrio].nombre}!`);
+      irAlLocal(nuevo);
+      notificar(
+        local
+          ? 'Local actualizado'
+          : `¡Abriste tu local en la Villa ${BARRIOS[nuevo.barrio].nombre}! Aparece en «Quiero contratar», donde te encuentran los clientes.`,
+      );
       // Después de abrir uno nuevo, el panel sigue con ese local (para sumarle servicios).
       if (!local) cambiar({ tipo: 'mi-local', localId: nuevo.id });
     } catch (e) {
@@ -167,44 +169,90 @@ export function PanelMiLocal({ localId }: { localId?: string }) {
 
       {local && (
         <>
-          <h3>
-            Mis servicios ({servicios.length}/{MAX_SERVICIOS_POR_LOCAL})
-          </h3>
-          <ul className="lista-tarjetas">
-            {servicios.map((s) => (
-              <li key={s.id} className="servicio">
-                <span className="servicio-texto">
-                  <b>{s.titulo}</b>
-                  <span className="tenue">Entrega en {s.dias_entrega} días</span>
-                </span>
-                <span className="precio">{s.precio_usdc} USDC</span>
-                <button type="button" className="boton boton-mini" onClick={() => setEditando(s)}>
-                  <Icono nombre="editar" tamano={14} /> Editar
-                </button>
-              </li>
-            ))}
-          </ul>
-          {editando ? (
-            <FormularioServicio
-              localId={local.id}
-              servicio={editando === 'nuevo' ? null : editando}
-              onListo={async (texto) => {
-                setEditando(null);
-                await recargarPueblo();
-                notificar(texto);
-              }}
-              onCancelar={() => setEditando(null)}
-            />
-          ) : (
-            servicios.length < MAX_SERVICIOS_POR_LOCAL && (
-              <button type="button" className="boton" onClick={() => setEditando('nuevo')}>
-                <Icono nombre="mas" /> Nuevo servicio
-              </button>
-            )
-          )}
+          <ServiciosDelLocal localId={local.id} />
+          <section className="pila-compacta">
+            <h3>Eliminar el local</h3>
+            <p className="tenue pequeno">
+              Deja de verse en la villa y libera su lote. No se puede mientras tenga pedidos en curso; los terminados siguen en tu historial.
+            </p>
+            <BotonEliminarLocal local={local} onEliminado={() => cambiar({ tipo: 'mis-locales' })} />
+          </section>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Los servicios de uno de mis locales: agregar, editar y quitar, a la vista.
+ * Se usa en «Editar» (PanelMiLocal), dentro de tu propio local (PanelLote) y en «Mis locales».
+ */
+export function ServiciosDelLocal({ localId }: { localId: string }) {
+  const { locales, recargarPueblo, notificar, avisar } = useEstado();
+  const [editando, setEditando] = useState<Servicio | 'nuevo' | null>(null);
+  const [quitando, setQuitando] = useState<string | null>(null);
+  const servicios = locales.find((l) => l.id === localId)?.servicios ?? [];
+
+  const quitar = async (s: Servicio) => {
+    const ok = window.confirm(`¿Quitar «${s.titulo}»?\n\nDeja de verse en tu local. Los pedidos que ya tiene siguen su curso hasta terminar.`);
+    if (!ok) return;
+    setQuitando(s.id);
+    try {
+      await api(`/servicios/${s.id}`, { metodo: 'DELETE' });
+      await recargarPueblo();
+      notificar(`Quitaste «${s.titulo}»`);
+    } catch (e) {
+      avisar(mensajeDeError(e), 'error');
+    } finally {
+      setQuitando(null);
+    }
+  };
+
+  return (
+    <section className="pila-compacta">
+      <h3>
+        Mis servicios ({servicios.length}/{MAX_SERVICIOS_POR_LOCAL})
+      </h3>
+      {servicios.length === 0 && !editando && <p className="tenue pequeno">Todavía no tiene servicios: agrega el primero.</p>}
+      <ul className="lista-tarjetas">
+        {servicios.map((s) => (
+          <li key={s.id} className="servicio">
+            <span className="servicio-texto">
+              <b>{s.titulo}</b>
+              <span className="tenue pequeno">
+                {s.precio_usdc} USDC · entrega en {s.dias_entrega} {s.dias_entrega === 1 ? 'día' : 'días'}
+              </span>
+            </span>
+            <span className="fila">
+              <button type="button" className="boton boton-mini" onClick={() => setEditando(s)}>
+                <Icono nombre="editar" tamano={14} /> Editar
+              </button>
+              <button type="button" className="boton boton-mini boton-peligro" disabled={quitando === s.id} onClick={() => quitar(s)}>
+                {quitando === s.id ? 'Quitando…' : 'Quitar'}
+              </button>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {editando ? (
+        <FormularioServicio
+          localId={localId}
+          servicio={editando === 'nuevo' ? null : editando}
+          onListo={async (texto) => {
+            setEditando(null);
+            await recargarPueblo();
+            notificar(texto);
+          }}
+          onCancelar={() => setEditando(null)}
+        />
+      ) : servicios.length < MAX_SERVICIOS_POR_LOCAL ? (
+        <button type="button" className="boton" onClick={() => setEditando('nuevo')}>
+          <Icono nombre="mas" /> Agregar servicio
+        </button>
+      ) : (
+        <p className="tenue pequeno">Llegaste al máximo de {MAX_SERVICIOS_POR_LOCAL} servicios en este local. Quita uno para agregar otro.</p>
+      )}
+    </section>
   );
 }
 

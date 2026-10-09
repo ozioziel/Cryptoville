@@ -25,7 +25,7 @@ interface LocalDeLaPersona {
  */
 export function ChatCercania() {
   const { usuario } = useSesion();
-  const { chatCon, cerrarChat, mensajeCercania, registrarMensaje, abrir, avisar } = useEstado();
+  const { chatCon, cerrarChat, mensajeCercania, registrarMensaje, abrir, avisar, irAlLocal } = useEstado();
   const [persona, setPersona] = useState<UsuarioPublico | null>(null);
   const [local, setLocal] = useState<LocalDeLaPersona | null>(null);
   const [mensajes, setMensajes] = useState<MensajeCercania[]>([]);
@@ -108,7 +108,7 @@ export function ChatCercania() {
       </header>
       <nav className="chat-acciones" aria-label="Acciones">
         {local && (
-          <button type="button" className="enlace" onClick={() => emitir('ir-a-local', { barrio: local.barrio, lote: local.lote })}>
+          <button type="button" className="enlace" onClick={() => irAlLocal(local, 'edificio')}>
             Visitar local
           </button>
         )}

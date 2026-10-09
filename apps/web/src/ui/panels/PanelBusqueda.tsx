@@ -15,7 +15,6 @@ import { cargarReputaciones } from '../../features/services/datos';
 import { cargarPortafolio, cargarProyectos } from '../../features/portafolio/datos';
 import { TarjetaProyecto } from './PanelPortafolio';
 import type { Proyecto } from '@cryptoville/shared';
-import { emitir } from '../../game/EventBus';
 import { api, mensajeDeError } from '../../lib/api';
 import { obtenerConfig } from '../../lib/config';
 import { EditorPlan, planInicial } from '../pagos/EditorPlan';
@@ -39,7 +38,7 @@ const CLASE_PROPUESTA: Record<EstadoPropuesta, string> = {
 /** Un «Se busca»: lo que necesita la persona y, según quién mira, las propuestas o el formulario para proponer. */
 export function PanelBusqueda({ id }: { id: string }) {
   const { usuario, locales: misLocales } = useSesion();
-  const { abrir, cambiar, version, refrescar, notificar } = useEstado();
+  const { abrir, cambiar, version, refrescar, notificar, irAlSeBusca, modo, cerrar } = useEstado();
   const [b, setB] = useState<BusquedaDetalle | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
 
@@ -76,6 +75,21 @@ export function PanelBusqueda({ id }: { id: string }) {
         <p className="tenue pequeno">
           Villa {BARRIOS[b.barrio].nombre} · publicado el {fechaCorta(b.creado_en)} por <Nombre nombre={b.autor.nombre} verificado={b.autor.verificado} />
         </p>
+        {esAutor && abierta && modo !== 'trabajar' && (
+          <p className="tenue pequeno">
+            Tu «Se busca» aparece como un cartel en el modo «Quiero trabajar», donde lo ven los proveedores.{' '}
+            <button
+              type="button"
+              className="enlace"
+              onClick={() => {
+                cerrar();
+                irAlSeBusca(b);
+              }}
+            >
+              Ver mi cartel
+            </button>
+          </p>
+        )}
         {!esAutor && (
           <div className="fila">
             <BotonReportar tipo="busqueda" objetoId={b.id} nombre={'«' + b.titulo + '»'} />
@@ -150,7 +164,7 @@ function PropuestasRecibidas({
   onElegida: (pedidoId: string) => void;
   onCerrada: () => void;
 }) {
-  const { cerrar } = useEstado();
+  const { cerrar, irAlLocal } = useEstado();
   const visibles = b.propuestas.filter((p) => p.estado !== 'retirada');
   const [reputaciones, setReputaciones] = useState<Map<string, Reputacion>>(new Map());
   const [confirmando, setConfirmando] = useState<string | null>(null);
@@ -225,7 +239,7 @@ function PropuestasRecibidas({
                     className="boton boton-mini"
                     onClick={() => {
                       cerrar();
-                      emitir('ir-a-local', { barrio: local.barrio, lote: local.lote });
+                      irAlLocal(local);
                     }}
                   >
                     Ver su local <Icono nombre="flecha" tamano={14} />

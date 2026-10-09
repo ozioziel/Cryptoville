@@ -2,6 +2,7 @@ import { enlacePagina, esHashValido, type Parte } from '@cryptoville/shared';
 import { useState } from 'react';
 import { api, mensajeDeError } from '../../lib/api';
 import { obtenerConfig } from '../../lib/config';
+import { avisarCambioDeSaldo } from '../rampas/datos';
 import { useEstado } from '../../ui/estado';
 import { Aviso, Copiar } from '../../ui/components/basicos';
 import { Icono } from '../../ui/components/Iconos';
@@ -74,6 +75,7 @@ export function FirmarEnApp({
       setEtapa('enviando');
       await api('/transacciones/enviar', { cuerpo: { id: preparada.id, xdr_firmado: firmada } });
       avisar(`Listo: ${etiqueta.toLowerCase()} (verificado en la red)`, 'exito', cargando);
+      avisarCambioDeSaldo();
       onListo();
     } catch (e) {
       if (e instanceof CanceladoPorUsuario) {
@@ -161,6 +163,7 @@ function FirmarFueraV2({
         await api('/transacciones/enviar', { cuerpo: { id: preparada.id, xdr_firmado: texto } });
       }
       avisar(`Listo: ${etiqueta.toLowerCase()} (verificado en la red)`, 'exito');
+      avisarCambioDeSaldo();
       onListo();
     } catch (e) {
       setError(mensajeDeError(e));

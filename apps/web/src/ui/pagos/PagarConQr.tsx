@@ -4,7 +4,7 @@ import { clientePollar } from '../../features/auth/pollar';
 import { useSesion } from '../../features/auth/sesion';
 import { CanceladoPorUsuario } from '../../features/auth/wallet';
 import { crearRecargaPollar, estadoRecargaPollar, hayRampaBolivia, type RecargaPollar } from '../../features/rampas/pollar';
-import { crearRecarga, faltaParaPagar, saldoUsdc, simularPagoDelBanco, type Rampa } from '../../features/rampas/datos';
+import { avisarCambioDeSaldo, crearRecarga, faltaParaPagar, saldoUsdc, simularPagoDelBanco, type Rampa } from '../../features/rampas/datos';
 import { mensajeDeError } from '../../lib/api';
 import { obtenerConfig, servicios } from '../../lib/config';
 import { Aviso, Copiar, fechaCorta } from '../components/basicos';
@@ -59,7 +59,7 @@ function QrDeTexto({ texto }: { texto: string }) {
   return svg ? <span className="qr-imagen" role="img" aria-label="Código QR para pagar desde el banco" dangerouslySetInnerHTML={{ __html: svg }} /> : null;
 }
 
-function RecargaSimulada({ montoUsdc, direccion, pedidoId, onAcreditada }: { montoUsdc: string; direccion: string; pedidoId?: string; onAcreditada?: () => void }) {
+export function RecargaSimulada({ montoUsdc, direccion, pedidoId, onAcreditada }: { montoUsdc: string; direccion: string; pedidoId?: string; onAcreditada?: () => void }) {
   const [recarga, setRecarga] = useState<Rampa | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -114,7 +114,10 @@ function RecargaSimulada({ montoUsdc, direccion, pedidoId, onAcreditada }: { mon
             intentar(async () => {
               const r = await simularPagoDelBanco(recarga.id);
               setRecarga(r);
-              if (r.estado === 'acreditada') onAcreditada?.();
+              if (r.estado === 'acreditada') {
+                avisarCambioDeSaldo();
+                onAcreditada?.();
+              }
             })
           }
         >
@@ -135,7 +138,7 @@ function RecargaSimulada({ montoUsdc, direccion, pedidoId, onAcreditada }: { mon
 }
 
 /** SIN PROBAR: rampa real de Pollar (mainnet). Necesita haber entrado con Google o con el correo. */
-function RecargaConPollar({ montoUsdc, direccion, esPollar, onAcreditada }: { montoUsdc: string; direccion: string; esPollar: boolean; onAcreditada?: () => void }) {
+export function RecargaConPollar({ montoUsdc, direccion, esPollar, onAcreditada }: { montoUsdc: string; direccion: string; esPollar: boolean; onAcreditada?: () => void }) {
   const [recarga, setRecarga] = useState<RecargaPollar | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [error, setError] = useState<string | null>(null);

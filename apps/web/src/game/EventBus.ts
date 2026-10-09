@@ -34,6 +34,8 @@ export interface SeBuscaEnMapa {
   barrio: Barrio;
   lote: number;
   titulo: string;
+  /** Presupuesto ya escrito para el cartel (por ejemplo «hasta 50 USDC»). */
+  presupuesto?: string | null;
   avatarAutor: number;
   aparienciaAutor?: AparienciaPersona | null;
 }
@@ -157,6 +159,8 @@ export interface EventosJuego {
   joystick: [x: number, y: number];
   /** React → Phaser: pausar los controles mientras hay un panel abierto. */
   controles: [activos: boolean];
+  /** React → Phaser: «Mis pedidos» está abierto: el jugador se queda escribiendo en un libro (o deja de hacerlo). */
+  escribiendo: [activo: boolean];
 }
 
 export function emitir<K extends keyof EventosJuego>(evento: K, ...args: EventosJuego[K]): void {
