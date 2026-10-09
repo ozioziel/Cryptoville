@@ -80,6 +80,16 @@ export function codigoErrorContrato(mensaje: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
+/**
+ * Contrato donde nació el error de una simulación. Si el escrow llama al token y el token falla,
+ * el error sube con el número del token: hay que saber de quién es antes de traducirlo.
+ * Los eventos van del más nuevo al más viejo; el último «failing with contract error» es el original.
+ */
+export function contratoOrigenDelError(mensaje: string): string | null {
+  const origenes = [...mensaje.matchAll(/contract:(C[A-Z2-7]{55}), topics:\[error, Error\(Contract, #\d+\)\], data:\["failing with contract error"/g)];
+  return origenes.length ? origenes[origenes.length - 1][1] : null;
+}
+
 /** Compara dos valores leídos de la red (bigint, string o número) sin perder precisión. */
 export function mismoValor(a: unknown, b: unknown): boolean {
   if (a === undefined || a === null || b === undefined || b === null) return false;

@@ -2525,6 +2525,10 @@ button.cartel:focus-visible {
 .saldo-boton strong {
   font-variant-numeric: tabular-nums;
 }
+/* El menú vive dentro de la barra (z-index 20): con el menú abierto la barra sube sobre los paneles. */
+.barra:has(.saldo-menu) {
+  z-index: 36;
+}
 .saldo-menu {
   position: absolute;
   right: 0;

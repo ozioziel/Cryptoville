@@ -5,6 +5,7 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  HttpException,
   Inject,
   Injectable,
   Logger,
@@ -217,6 +218,7 @@ export class RampasService {
       await this.prisma.rampa.update({ where: { id }, data: { estado: 'vencida' } });
       throw new BadRequestException('El QR venció: arma otro');
     }
+    if (this.config.entorno !== 'test') await this.exigirEmisorEnRed();
     // Se marca primero: dos clics seguidos no emiten dos veces.
     const marcada = await this.prisma.rampa.updateMany({ where: { id, estado: 'esperando_pago' }, data: { estado: 'acreditada' } });
     if (marcada.count !== 1) throw new ConflictException('Esta recarga ya se está procesando');
@@ -229,7 +231,24 @@ export class RampasService {
       this.log.log(`Recarga simulada ${r.referencia}: ${r.monto_usdc.toString()} USDC de prueba a ${r.direccion.slice(0, 6)}…`);
       return await this.prisma.rampa.update({ where: { id }, data: { tx_hash: hash } });
     } catch (e) {
-      await this.prisma.rampa.update({ where: { id }, data: { estado: 'fallida' } });
+      // Un 4xx (simulación fallida, transacción rechazada o fallida en la red) no emitió nada: se puede reintentar.
+      // Ante un 5xx (sin red o sin confirmar) no se sabe si se emitió, así que la recarga queda fallida.
+      const sinEmitir = e instanceof HttpException && e.getStatus() < 500;
+      await this.prisma.rampa.update({ where: { id }, data: { estado: sinEmitir ? 'esperando_pago' : 'fallida' } });
+      throw e;
+    }
+  }
+
+  /** La cuenta emisora tiene que existir en la red; si no, el error no es de la wallet de la persona. */
+  private async exigirEmisorEnRed(): Promise<void> {
+    try {
+      await this.stellar.cuenta(this.direccionRampaSimulada());
+    } catch (e) {
+      if (e instanceof BadRequestException) {
+        throw new ServiceUnavailableException(
+          'La cuenta emisora del USDC de prueba no existe en la red: revisa RAMPA_SIMULADA_LLAVE (docs/simulaciones.md)',
+        );
+      }
       throw e;
     }
   }

@@ -83,6 +83,8 @@ export function PedidoV2({ pedido, rol, onListo }: { pedido: PedidoDetalle; rol:
   }
   if (metodo === 'directo') return <PagoDirecto pedido={pedido} rol={rol} onListo={listo} />;
   if (pedido.estado === 'aceptado') return <AntesDePagar pedido={pedido} rol={rol} metodo={metodo} fases={fases} onListo={listo} />;
+  // Solo se cancela antes de pagar: sus fases nunca empezaron y no hay que mostrarlas «pendientes de pago».
+  if (pedido.estado === 'cancelado') return <p className="tenue pequeno">Se canceló antes de pagar: no hubo dinero en garantía.</p>;
   return <ConFases pedido={pedido} rol={rol} fases={fases} pruebas={pruebas} usuarioId={usuario.id} onListo={listo} />;
 }
 
