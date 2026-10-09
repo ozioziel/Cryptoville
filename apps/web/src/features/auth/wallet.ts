@@ -6,6 +6,7 @@ import { StellarWalletsKit } from '@creit.tech/stellar-wallets-kit/sdk';
 import { defaultModules } from '@creit.tech/stellar-wallets-kit/modules/utils';
 import { Networks, type ModuleInterface } from '@creit.tech/stellar-wallets-kit/types';
 import { PASSPHRASE, datosRed, redDePassphrase, type RedStellar } from '@cryptoville/shared';
+import { esCelular } from '../../lib/dispositivo';
 
 const CLAVE_MODULO = 'cryptoville-wallet-modulo';
 let iniciado: Promise<void> | null = null;
@@ -37,10 +38,22 @@ function guardarModulo(): void {
   }
 }
 
+/** ¿La wallet funciona en este navegador? Las extensiones a veces no contestan: tras 1,5 s se toma como que no. */
+function disponible(modulo: ModuleInterface): Promise<boolean> {
+  const espera = new Promise<boolean>((listo) => setTimeout(() => listo(false), 1500));
+  return Promise.race([modulo.isAvailable().catch(() => false), espera]);
+}
+
 /** Inicia el kit (una sola vez). WalletConnect se carga solo si hay un project id. */
 function iniciar(red: RedStellar, walletConnectId?: string | null): Promise<void> {
   iniciado ??= (async () => {
-    const modulos: ModuleInterface[] = defaultModules();
+    let modulos: ModuleInterface[] = defaultModules();
+    // En el celular no hay extensiones: quedan las wallets que funcionan ahí (las web, como Albedo o xBull)
+    // y, más abajo, WalletConnect (la app de la wallet en el teléfono). El kit no las filtra solo.
+    if (esCelular()) {
+      const disponibles = await Promise.all(modulos.map((m) => disponible(m)));
+      modulos = modulos.filter((_, i) => disponibles[i]);
+    }
     if (walletConnectId) {
       try {
         const { WalletConnectModule, WalletConnectTargetChain } = await import('@creit.tech/stellar-wallets-kit/modules/wallet-connect');
@@ -63,7 +76,8 @@ function iniciar(red: RedStellar, walletConnectId?: string | null): Promise<void
     StellarWalletsKit.init({
       modules: modulos,
       network: red === 'mainnet' ? Networks.PUBLIC : Networks.TESTNET,
-      authModal: { showInstallLabel: true, hideUnsupportedWallets: false },
+      // En el celular no se ofrece «instalar» extensiones que ahí no existen.
+      authModal: { showInstallLabel: !esCelular() },
     });
     // Después de recargar la página, se vuelve a usar la última wallet elegida.
     try {
