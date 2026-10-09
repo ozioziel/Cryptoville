@@ -466,7 +466,7 @@ function FormularioProyecto({ proyecto: p, onListo, onCancelar }: { proyecto: Pr
           {videos.map((v, i) => (
             <li key={i} className="fila espaciada">
               <span className="fila pequeno">
-                <Icono nombre="video" tamano={14} /> {v.tipo === 'mux' ? 'Video subido a Cryptoville' : dominioDe(v.url)}
+                <Icono nombre="video" tamano={14} /> {v.tipo === 'mux' ? 'Video subido a WorkVille' : dominioDe(v.url)}
               </span>
               <button type="button" className="boton boton-mini" onClick={() => setVideos((x) => x.filter((_, j) => j !== i))}>
                 Quitar

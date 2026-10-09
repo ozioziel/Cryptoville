@@ -3,7 +3,7 @@ version: 2026-10-07
 ---
 # Comisiones y reglas
 
-Estos números salen del archivo de reglas de Cryptoville (`packages/shared/src/reglas.ts`). Si el equipo los cambia, esta página cambia sola.
+Estos números salen del archivo de reglas de WorkVille (`packages/shared/src/reglas.ts`). Si el equipo los cambia, esta página cambia sola.
 
 ## Comisiones
 

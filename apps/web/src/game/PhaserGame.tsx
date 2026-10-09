@@ -77,5 +77,5 @@ export function PhaserGame() {
     };
   }, []);
 
-  return <div ref={contenedor} className="juego" aria-label="Villas de Cryptoville" />;
+  return <div ref={contenedor} className="juego" aria-label="Villas de WorkVille" />;
 }

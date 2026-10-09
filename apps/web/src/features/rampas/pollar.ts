@@ -1,5 +1,5 @@
 // Rampa REAL con Pollar (mainnet): bolivianos → USDC con el QR del banco, desde el navegador y con la sesión
-// de Pollar de la persona (Google o correo). Cryptoville no toca el dinero: lo cambia el proveedor de Pollar.
+// de Pollar de la persona (Google o correo). WorkVille no toca el dinero: lo cambia el proveedor de Pollar.
 //
 // ⚠ SIN PROBAR: Pollar todavía no confirmó que tenga Bolivia (BOB) ni que su forma de pago «QR» sirva con
 // QR Simple. Este camino se usa solo en mainnet y solo si `getRampCountries()` trae Bolivia.

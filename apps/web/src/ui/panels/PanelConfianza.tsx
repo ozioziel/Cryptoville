@@ -39,7 +39,7 @@ export function PanelReportar({ reporte, objetoId, nombre }: { reporte: TipoRepo
   return (
     <div className="pila">
       <p>
-        Vas a reportar {QUE[reporte]}: <strong>{nombre}</strong>. El equipo de Cryptoville lo revisa y puede ocultarlo o suspender la cuenta.
+        Vas a reportar {QUE[reporte]}: <strong>{nombre}</strong>. El equipo de WorkVille lo revisa y puede ocultarlo o suspender la cuenta.
       </p>
       <fieldset className="opciones-motivo">
         <legend className="etiqueta">¿Qué pasa?</legend>
@@ -104,7 +104,7 @@ export function SeccionVerificacion() {
     <section className="caja pila" aria-label="Verificar mi identidad">
       <strong>Verificar mi identidad</strong>
       <p className="pequeno">
-        Hace falta para abrir un local, cobrar y dejar reseñas. Le muestras tu documento y tu cara a nuestro proveedor (Didit); Cryptoville no
+        Hace falta para abrir un local, cobrar y dejar reseñas. Le muestras tu documento y tu cara a nuestro proveedor (Didit); WorkVille no
         guarda tus fotos ni tu número de documento.
       </p>
       {estado === undefined ? <Cargando /> : estado && <p className="tenue pequeno">{texto[estado] ?? ''}</p>}
@@ -182,14 +182,14 @@ export function PanelAvisosFuera() {
   return (
     <div className="pila">
       <p className="tenue">
-        Los plazos mueven dinero: si no respondes a tiempo, el contrato actúa solo. Activa los avisos para enterarte aunque no tengas Cryptoville abierto.
+        Los plazos mueven dinero: si no respondes a tiempo, el contrato actúa solo. Activa los avisos para enterarte aunque no tengas WorkVille abierto.
       </p>
       <section className="caja pila">
         <strong>Notificaciones en este navegador</strong>
         {!sv.push_publica ? (
           <p className="tenue pequeno">Todavía no están disponibles en este servidor.</p>
         ) : !pushDisponible() ? (
-          <p className="tenue pequeno">Tu navegador no permite notificaciones (en iPhone, primero agrega Cryptoville a la pantalla de inicio).</p>
+          <p className="tenue pequeno">Tu navegador no permite notificaciones (en iPhone, primero agrega WorkVille a la pantalla de inicio).</p>
         ) : (
           <button
             type="button"

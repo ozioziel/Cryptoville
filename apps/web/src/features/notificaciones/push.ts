@@ -27,7 +27,7 @@ export async function pushActivo(): Promise<boolean> {
 }
 
 export async function activarPush(llavePublica: string): Promise<void> {
-  if (!pushDisponible()) throw new Error('Tu navegador no permite notificaciones (en iPhone, primero agrega Cryptoville a la pantalla de inicio).');
+  if (!pushDisponible()) throw new Error('Tu navegador no permite notificaciones (en iPhone, primero agrega WorkVille a la pantalla de inicio).');
   const permiso = await Notification.requestPermission();
   if (permiso !== 'granted') throw new Error('No diste permiso para las notificaciones. Puedes darlo desde la configuración del navegador.');
   const reg = await registro();

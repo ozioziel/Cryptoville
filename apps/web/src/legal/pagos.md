@@ -29,7 +29,7 @@ version: 2026-10-07
 ## 4. Disputas
 
 - Cualquiera de las partes puede abrir una disputa por una fase. El dinero de esa fase queda congelado y las fases siguientes esperan.
-- El árbitro (el equipo de Cryptoville) revisa el expediente: el plan, las pruebas, el chat y las transacciones.
+- El árbitro (el equipo de WorkVille) revisa el expediente: el plan, las pruebas, el chat y las transacciones.
 - El árbitro decide a favor del cliente, del proveedor o reparte 50/50. Nunca puede quedarse con el dinero.
 - Si el árbitro no decide en {{plazo_disputa_dias}} días, cualquiera puede repartir esa fase 50/50.
 
@@ -37,6 +37,6 @@ version: 2026-10-07
 
 ## 5. El contrato
 
-- El contrato es público en la red de Stellar y su código está en el repositorio de Cryptoville.
+- El contrato es público en la red de Stellar y su código está en el repositorio de WorkVille.
 - Si el contrato tiene que actualizarse, se anuncia con {{aviso_actualizacion_dias}} días de anticipación.
 - El contrato tiene una pausa de emergencia que solo frena pedidos nuevos: nunca bloquea pagos, reembolsos ni vencimientos.

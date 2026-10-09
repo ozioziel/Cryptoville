@@ -1,6 +1,6 @@
 // Entrar con correo (para quien no conoce cripto), con Pollar (https://docs.pollar.xyz).
 // - Pollar crea una wallet de Stellar para la persona y la guarda por ella: la persona no anota 24 palabras.
-// - Cryptoville nunca tiene esa llave: Pollar firma el mensaje de inicio de sesión (SEP-53) y las transacciones.
+// - WorkVille nunca tiene esa llave: Pollar firma el mensaje de inicio de sesión (SEP-53) y las transacciones.
 // - Solo se carga si el servidor tiene POLLAR_API_KEY (si no, solo aparece la entrada con wallet).
 import type { RedStellar } from '@cryptoville/shared';
 import type { AuthState, PollarClient } from '@pollar/core';
@@ -103,14 +103,14 @@ export function direccionPollar(c: PollarClient): string | null {
   return c.getWallet()?.address ?? null;
 }
 
-/** Firma el mensaje de inicio de sesión de Cryptoville (SEP-53) con la wallet de Pollar. */
+/** Firma el mensaje de inicio de sesión de WorkVille (SEP-53) con la wallet de Pollar. */
 export async function firmarMensajePollar(c: PollarClient, mensaje: string): Promise<string> {
   const r = await c.stellar.sep53.signMessage(mensaje);
   if (r.status !== 'signed') throw new Error(`No se pudo firmar con tu cuenta: ${r.details ?? r.code ?? 'error desconocido'}`);
   return r.signature;
 }
 
-/** Firma una transacción (XDR) armada por Cryptoville con la wallet de Pollar. */
+/** Firma una transacción (XDR) armada por WorkVille con la wallet de Pollar. */
 export async function firmarTransaccionPollar(c: PollarClient, xdr: string): Promise<string> {
   const r = await c.signTx(xdr);
   if (r.status !== 'signed') throw new Error(`No se pudo firmar con tu cuenta: ${r.message ?? r.details ?? r.code ?? 'error desconocido'}`);

@@ -109,7 +109,7 @@ export function PanelRetiro() {
         Número de cuenta
       </label>
       <input id="retiro-cuenta" className="campo" inputMode="numeric" value={cuenta} onChange={(e) => setCuenta(e.target.value.replace(/\D/g, ''))} />
-      <span className="tenue pequeno">Cryptoville solo guarda los últimos 4 dígitos.</span>
+      <span className="tenue pequeno">WorkVille solo guarda los últimos 4 dígitos.</span>
       {cotizacion && (
         <span>
           Te llegan <strong>Bs {cotizacion.monto_local}</strong> (cambio Bs {cotizacion.tipo_cambio} por dólar, comisión Bs {cotizacion.comision_local}).

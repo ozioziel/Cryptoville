@@ -30,7 +30,7 @@ export interface DatosExtraPaso {
 
 /**
  * Firmar un paso del contrato dentro de la app, sin Stellar Lab:
- * Cryptoville arma la transacción, tu wallet la firma (en tu dispositivo) y Cryptoville la envía y la verifica.
+ * WorkVille arma la transacción, tu wallet la firma (en tu dispositivo) y WorkVille la envía y la verifica.
  * - tipo "paso_pedido": contrato v1 · "paso_v2": fases del contrato v2 · "pago_directo": pago sin garantía
  *   · "pago_local": pago único del local extra (no es de un pedido) · "retiro_rampa": mandar USDC a la rampa para cobrarlo en el banco.
  */
@@ -92,7 +92,7 @@ export function FirmarEnApp({
       <button type="button" className="boton boton-primario" disabled={deshabilitado || etapa !== 'listo'} onClick={firmar}>
         <Icono nombre="escudo" /> {etapa === 'listo' ? (texto ?? TEXTO.listo) : TEXTO[etapa]}
       </button>
-      <span className="tenue pequeno">Tu wallet te muestra qué firmas. Cryptoville nunca tiene tus llaves.</span>
+      <span className="tenue pequeno">Tu wallet te muestra qué firmas. WorkVille nunca tiene tus llaves.</span>
       {error && <Aviso tipo="peligro">{error}</Aviso>}
       {pedidoId && accion && (tipo === 'paso_v2' || tipo === 'pago_directo') && (
         <FirmarFueraV2 pedidoId={pedidoId} accion={accion} tipo={tipo} etiqueta={etiqueta} extra={extra} deshabilitado={deshabilitado} onListo={onListo} />
@@ -103,8 +103,8 @@ export function FirmarEnApp({
 
 /**
  * Respaldo del contrato v2 para cuando la wallet no puede firmar dentro de la app:
- * Cryptoville arma la transacción, la persona la firma en Stellar Lab (o en otra wallet) y pega aquí
- * el hash (si ya la envió) o la transacción firmada (para que Cryptoville la envíe). En los dos casos la API la verifica.
+ * WorkVille arma la transacción, la persona la firma en Stellar Lab (o en otra wallet) y pega aquí
+ * el hash (si ya la envió) o la transacción firmada (para que WorkVille la envíe). En los dos casos la API la verifica.
  */
 function FirmarFueraV2({
   pedidoId,
@@ -205,7 +205,7 @@ function FirmarFueraV2({
             </button>
           </li>
         </ol>
-        <span className="tenue">Cryptoville revisa en la red que la transacción sea exactamente este paso (contrato, función, partes y montos).</span>
+        <span className="tenue">WorkVille revisa en la red que la transacción sea exactamente este paso (contrato, función, partes y montos).</span>
         {error && <Aviso tipo="peligro">{error}</Aviso>}
       </div>
     </details>

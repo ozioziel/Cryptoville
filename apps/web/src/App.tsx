@@ -70,7 +70,7 @@ export function App() {
       <div className="pantalla-error">
         <div className="pantalla-tarjeta">
           <h1>
-            <LogoIcono tamano={32} /> Cryptoville
+            <LogoIcono tamano={56} /> WorkVille
           </h1>
           <p>{error}</p>
           <button type="button" className="boton boton-primario" onClick={() => location.reload()}>
@@ -85,9 +85,9 @@ export function App() {
       <div className="pantalla-error">
         <div className="pantalla-tarjeta">
           <h1>
-            <LogoIcono tamano={32} /> Cryptoville
+            <LogoIcono tamano={56} /> WorkVille
           </h1>
-          <p className="tenue cargando">Cargando Cryptoville…</p>
+          <p className="tenue cargando">Cargando WorkVille…</p>
         </div>
       </div>
     );
@@ -319,9 +319,9 @@ function Pueblo() {
       )}
       <header className="barra">
         <div className="barra-lado">
-          <button type="button" className="pastilla logo" onClick={() => abrir({ tipo: 'bienvenida' })} aria-label="Cryptoville: ¿cómo funciona?">
+          <button type="button" className="pastilla logo" onClick={() => abrir({ tipo: 'bienvenida' })} aria-label="WorkVille: ¿cómo funciona?">
             <LogoIcono />
-            <span className="solo-ancho-medio">Cryptoville</span>
+            <span className="solo-ancho-medio">WorkVille</span>
           </button>
           <div className="pastilla villa-actual">
             <span className="punto" style={{ background: BARRIOS[villa].color }} />
@@ -528,7 +528,7 @@ function portadaPanel(p: PanelAbierto, locales: LocalDelPueblo[], villa: Barrio)
 function tituloPanel(p: PanelAbierto, locales: LocalDelPueblo[], villa: Barrio): string {
   switch (p.tipo) {
     case 'bienvenida':
-      return 'Bienvenido a Cryptoville';
+      return 'Bienvenido a WorkVille';
     case 'lote':
       return localDelPanel(p, locales, villa)?.nombre ?? 'Lote disponible';
     case 'servicio':

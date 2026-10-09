@@ -1,5 +1,5 @@
 /*
- * Cryptoville: estilo "profesional amable" de la Villa Audiovisual aprobada
+ * WorkVille: estilo "profesional amable" de la Villa Audiovisual aprobada
  * (docs/propuestas/estilo-visual/muestra-villa-audiovisual.html).
  * Bordes finos, radio de 12 px en controles y 18 px en paneles, sombra suave y Plus Jakarta Sans.
  */
@@ -180,6 +180,12 @@ button.pastilla:hover {
   font-weight: 800;
   font-size: 18px;
   letter-spacing: -0.02em;
+}
+.marca-logo {
+  display: inline-block;
+  flex-shrink: 0;
+  object-fit: contain;
+  vertical-align: middle;
 }
 .punto {
   width: 10px;
@@ -896,9 +902,6 @@ button.servicio:hover {
   gap: 14px;
   align-items: center;
 }
-.bienvenida-cabecera svg {
-  flex-shrink: 0;
-}
 
 .dato-curioso {
   margin: 0;
@@ -1603,7 +1606,7 @@ button.cartel:focus-visible {
 }
 
 /* =====================================================================
- * Cryptoville v2
+ * WorkVille v2
  * ===================================================================== */
 
 /* ---------- Franja de testnet: avisa que el dinero no es real (no aparece en mainnet) ---------- */
