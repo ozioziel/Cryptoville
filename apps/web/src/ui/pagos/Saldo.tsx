@@ -49,14 +49,23 @@ export function SaldoArriba() {
     document.addEventListener('visibilitychange', alVolver);
     return () => document.removeEventListener('visibilitychange', alVolver);
   }, [leer]);
-  // El menú se cierra al tocar afuera.
+  // El menú se cierra al tocar afuera o con Escape (sin cerrar también el panel que haya abierto).
   useEffect(() => {
     if (!menu) return;
     const afuera = (e: PointerEvent) => {
       if (caja.current && !caja.current.contains(e.target as Node)) setMenu(false);
     };
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      setMenu(false);
+    };
     document.addEventListener('pointerdown', afuera);
-    return () => document.removeEventListener('pointerdown', afuera);
+    document.addEventListener('keydown', tecla, true);
+    return () => {
+      document.removeEventListener('pointerdown', afuera);
+      document.removeEventListener('keydown', tecla, true);
+    };
   }, [menu]);
 
   if (!usuario || !direccion) return null;

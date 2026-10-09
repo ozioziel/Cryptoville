@@ -2,7 +2,7 @@ import { BadRequestException, Inject, Injectable, Logger, ServiceUnavailableExce
 import { ERRORES_CONTRATO, PASSPHRASE } from '@cryptoville/shared';
 import { Account, Address, BASE_FEE, Contract, Keypair, TransactionBuilder, nativeToScVal, rpc, scValToNative, type Transaction, type xdr } from '@stellar/stellar-sdk';
 import { CONFIGURACION, type Configuracion } from '../config/configuracion';
-import { codigoErrorContrato, hashDe, transaccionDeXdr } from './cadena';
+import { codigoErrorContrato, contratoOrigenDelError, hashDe, transaccionDeXdr } from './cadena';
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -206,6 +206,10 @@ export class StellarService {
   private errorDeSimulacion(e: unknown): BadRequestException {
     const mensaje = String((e as Error)?.message ?? e);
     const codigo = codigoErrorContrato(mensaje);
+    if (codigo !== null && this.config.stellar.tokenId && contratoOrigenDelError(mensaje) === this.config.stellar.tokenId) {
+      // Falló el token (casi siempre por saldo): sus números de error no son los del escrow.
+      return new BadRequestException('Tu wallet no tiene USDC suficiente para este pago. Recarga y vuelve a intentar.');
+    }
     if (codigo !== null) {
       const texto = ERRORES_CONTRATO[codigo]?.explicacion ?? ERRORES_EXTRA[codigo] ?? `Error #${codigo} del contrato.`;
       return new BadRequestException(`El contrato no lo permite: ${texto}`);

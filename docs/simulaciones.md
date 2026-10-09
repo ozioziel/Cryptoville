@@ -28,6 +28,8 @@ Lo que hoy funciona **de mentira** (para poder probar el flujo completo en testn
 - **El QR:** es un texto que empieza con `SIMULADO-CRYPTOVILLE|QR-SIMPLE|…`. Ningún banco lo puede cobrar.
 - **El tipo de cambio:** fijo, **Bs 6,96 por dólar**, y una comisión de **1 %**. Están en `RAMPA_SIMULADA` de `packages/shared/src/rampas.ts`.
 - **El pago del banco:** el botón «Simular el pago desde el banco (solo pruebas)» hace de banco. La API emite USDC de prueba a la wallet de la persona con la llave del **emisor del USDC de prueba**. Esa llave sale de `RAMPA_SIMULADA_LLAVE` o, en tu PC, de `.seed-keys.json`.
+  - Esa llave tiene que ser la del admin del token de `PAYMENT_TOKEN_ID`. En un clon nuevo, `npm run setup` genera un `.seed-keys.json` con un emisor nuevo que no es el admin: pide la llave al equipo y ponla en `RAMPA_SIMULADA_LLAVE`.
+  - Si la red rechaza el `mint` sin emitir nada, la recarga vuelve a «esperando pago» y se puede reintentar; si no se sabe (sin red o sin confirmar), queda `fallida`.
   - Es la **única** excepción a «el servidor nunca firma». Solo puede llamar a `mint` del token de pago, solo en testnet y solo con la rampa simulada encendida (`StellarService.emitirParaRampaSimulada`).
 
 **Qué sí es real:** el USDC de prueba llega de verdad a la wallet, en testnet. Cada recarga queda en la tabla `rampas`, con su referencia y el hash de la transacción.

@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { leerConfiguracion } from '../src/config/configuracion';
 import { hayLlavesDeEjemplo, revisarConfiguracion, revisarParaArrancar } from '../src/config/revision-mainnet';
-import { arg, codigoErrorContrato, hashDe, invocacionDe, mismoValor, transaccionDeXdr, variante } from '../src/stellar/cadena';
+import { arg, codigoErrorContrato, contratoOrigenDelError, hashDe, invocacionDe, mismoValor, transaccionDeXdr, variante } from '../src/stellar/cadena';
 
 const CONTRATO = 'CCRQGMOX6H2XSGGCY536IONZNRR47RCPMKH7Z4U3SP3JC5L6HHF7AVS7';
 
@@ -60,6 +60,19 @@ describe('lectura de llamadas al contrato', () => {
   it('extrae el código de error del contrato del mensaje de simulación', () => {
     expect(codigoErrorContrato('HostError: Error(Contract, #7)\n...')).toBe(7);
     expect(codigoErrorContrato('otra cosa')).toBeNull();
+  });
+
+  it('encuentra el contrato donde nació el error aunque lo haya llamado otro', () => {
+    const TOKEN = 'CAPNVQKXNFIJ4X75GMV2IHBXEZQ3RZRVAGMFWV6TGZSDYVT6AMSFJJFX';
+    const mensaje = [
+      'HostError: Error(Contract, #2)',
+      'Event log (newest first):',
+      `   0: [Diagnostic Event] contract:${CONTRATO}, topics:[error, Error(Contract, #2)], data:"escalating error to VM trap from failed host function call: call"`,
+      `   1: [Diagnostic Event] contract:${CONTRATO}, topics:[error, Error(Contract, #2)], data:["contract call failed", transfer, []]`,
+      `   2: [Diagnostic Event] contract:${TOKEN}, topics:[error, Error(Contract, #2)], data:["failing with contract error", 2]`,
+    ].join('\n');
+    expect(contratoOrigenDelError(mensaje)).toBe(TOKEN);
+    expect(contratoOrigenDelError('HostError: Error(Contract, #2)')).toBeNull();
   });
 });
 
