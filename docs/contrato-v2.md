@@ -127,3 +127,13 @@ cd contracts && cargo test -- --ignored
 ```
 
 `npm run contract:build` deja `contracts/dist/cryptoville_escrow_v2.wasm` e imprime su hash (para `proponer_actualizacion`). Cómo desplegarlo en Stellar Lab: [guía de Stellar Lab](guia-stellar-lab.md#contrato-v2).
+
+## Cómo comprobar el código desplegado
+
+El `.wasm` que usa la app lo compila GitHub Actions (`.github/workflows/release-contrato.yml`) al publicar un tag `contratos-*`. Cada Release trae el `.wasm` y una attestation firmada por GitHub que une su hash con el commit, y el `.wasm` lleva `source_repo=github:ozioziel/Cryptoville` en sus metadatos (estándar SEP-55). Para comprobarlo:
+
+1. `stellar contract info build --id C… --network testnet` lee el hash del código desplegado, busca su attestation en GitHub y muestra el repo, el tag, el commit y la corrida que lo compiló.
+2. O a mano: el código desplegado (`stellar contract fetch --id C… --network testnet -o desplegado.wasm`) debe tener el mismo SHA-256 que el `.wasm` del Release, y `gh attestation verify desplegado.wasm --repo ozioziel/Cryptoville --signer-repo stellar-expert/soroban-build-workflow` confirma que lo compiló GitHub desde ese commit.
+3. StellarExpert muestra el repo en la página del contrato solo si su servicio de verificación procesó el aviso del workflow; ese servicio no es confiable hoy, así que su «unverified» no prueba nada por sí solo.
+
+Cómo publicar y desplegar un `.wasm` verificado: [guía de Stellar Lab](guia-stellar-lab.md#7-contratos-verificados-sep-55).

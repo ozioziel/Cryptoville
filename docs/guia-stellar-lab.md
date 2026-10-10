@@ -220,7 +220,7 @@ El contrato v2 (`contracts/escrow-v2`) suma los pagos **por etapas** (1 a 5 fase
 
 ### 2. Desplegar
 
-1. `npm run contract:build` → `contracts/dist/cryptoville_escrow_v2.wasm`.
+1. `npm run contract:build` → `contracts/dist/cryptoville_escrow_v2.wasm`. Sirve para probar; para el contrato que usa la app, mejor el `.wasm` verificado (sección 7).
 2. **Smart contracts → Upload and deploy contract**, con el admin como *Source account*: sube el `.wasm` y despliégalo con este constructor:
 
    | Argumento | Valor |
@@ -275,6 +275,53 @@ Sin `ESCROW_V2_CONTRACT_ID` la app solo ofrece el pago con garantía del v1. Sin
 ### 6. Pausa de emergencia
 
 `pausar(admin)` frena los pedidos y pagos directos **nuevos**. Liberar, reembolsar, resolver y los vencimientos siguen funcionando. `reanudar(admin)` la quita.
+
+### 7. Contratos verificados (SEP-55)
+
+«Verificado» quiere decir que cualquiera puede comprobar que el `.wasm` desplegado sale de este repo. Para eso el `.wasm` lo compila **GitHub Actions**, no tu PC: GitHub firma una *attestation* que une el hash del `.wasm` con el repo y el commit, y el `.wasm` lleva `source_repo` en sus metadatos. Un `.wasm` compilado en tu PC (como los de `contracts/dist/`) nunca queda verificado, aunque el código sea el mismo: su hash es otro.
+
+> [!NOTE]
+> La prueba que vale es la del CLI oficial (`stellar contract info build`, paso 5). La insignia de StellarExpert depende de un servicio suyo que su autor dio por discontinuado y reactivó a medias en octubre de 2026 ([issue #9](https://github.com/stellar-expert/soroban-build-workflow/issues/9)): puede quedar «unverified» aunque todo esté bien.
+
+1. **Compilar en GitHub.** Desde `main` actualizado, publica un tag que empiece con `contratos-`:
+
+   ```bash
+   git tag contratos-1 && git push origin contratos-1
+   ```
+
+   El workflow `.github/workflows/release-contrato.yml` compila el escrow v1 (`cryptoville-escrow`) y el v2 (`cryptoville-escrow-v2`) y crea un Release para cada uno, con su `.wasm` (`cryptoville-escrow_v0.1.0.wasm`, `cryptoville-escrow-v2_v0.2.0.wasm`) y su attestation. Para publicar otra versión, sube el `version` del `Cargo.toml` del contrato y usa un tag nuevo.
+2. **Descargar cada `.wasm`** y comprobar que es el que firmó GitHub:
+
+   ```bash
+   gh release download <nombre-del-release> --pattern '*.wasm' --dir /tmp/contratos
+   gh attestation verify /tmp/contratos/<archivo>.wasm --repo ozioziel/Cryptoville \
+     --signer-repo stellar-expert/soroban-build-workflow
+   ```
+
+   Con la cuenta del admin cargada en el CLI (`stellar keys add admin --secret-key`), sube cada `.wasm` a la red. El comando devuelve su hash:
+
+   ```bash
+   stellar contract upload --wasm /tmp/contratos/<archivo>.wasm --source admin --network testnet
+   ```
+3. **v1: actualizar el contrato que ya existe.** El `upgrade` del v1 es inmediato, conserva la dirección `C…` y sus pedidos, y no hay que tocar el `.env`:
+
+   ```bash
+   stellar contract invoke --id <ESCROW_CONTRACT_ID> --source admin --network testnet -- \
+     upgrade --admin <G… del admin> --wasm_hash <hash del v1>
+   ```
+4. **v2: desplegar un contrato nuevo** (actualizar el v2 tarda 7 días: sección 5):
+
+   ```bash
+   stellar contract deploy --wasm-hash <hash del v2> --source admin --network testnet -- \
+     --admin G… --arbitro G… --token C… --tesoreria G… \
+     --comision_bps 300 --comision_directo_bps 100 \
+     --plazo_revision_seg 259200 --plazo_disputa_seg 1209600 --tope_pedido 0
+   ```
+
+   Usa los mismos valores que el contrato actual (los devuelve su función `config()`). Después cambia `ESCROW_V2_CONTRACT_ID` en el `.env` del VPS y vuelve a ejecutar `bash deploy/deploy.sh`.
+
+   Un contrato nuevo empieza **vacío**. Los pedidos v2 ya pagados se quedan en el contrato anterior: la app deja de verlos en la red (los botones de esos pedidos fallan con «el pedido no existe»). Antes de cambiar, revisa que no queden pedidos v2 pagados y sin terminar en la base. Los pedidos que todavía no se pagaron no importan: se crean en el contrato nuevo al pagar. Si prefieres conservar la misma dirección y sus pedidos, usa la actualización con aviso (sección 5) con el hash del `.wasm` del Release: queda verificado, pero tarda 7 días.
+5. **Comprobar** cada contrato con el CLI de Stellar: `stellar contract info build --id <C…> --network testnet` debe responder «✅ Attestation found» con el repo, el tag y el commit. Si el servicio de StellarExpert funciona, `https://stellar.expert/explorer/testnet/contract/<C…>` también muestra el repo.
 
 ### Errores nuevos del v2
 
